@@ -11,10 +11,10 @@ function sx(v){return v*W} function sy(v){return v*H}
 function reset(){
  state="playing";elapsed=spawnClock=0;spawned=0;ammo=18;gas=startGas;missiles=[];interceptors=[];blasts=[];sparks=[];refinery.hp=2;terminal.hp=2;
  ships=[
-  {x:-.07,y:.48,lane:-.020,speed:.026,hp:1,name:"TANKER 01",done:false},
-  {x:-.27,y:.52,lane:.018,speed:.024,hp:1,name:"CARRIER 02",done:false},
-  {x:-.47,y:.47,lane:-.006,speed:.023,hp:1,name:"TANKER 03",done:false},
-  {x:-.67,y:.53,lane:.035,speed:.021,hp:1,name:"FREIGHTER 04",done:false}
+  {x:-.07,y:.48,lane:-.020,speed:.034,hp:1,name:"TANKER 01",done:false},
+  {x:-.27,y:.52,lane:.018,speed:.032,hp:1,name:"CARRIER 02",done:false},
+  {x:-.47,y:.47,lane:-.006,speed:.030,hp:1,name:"TANKER 03",done:false},
+  {x:-.67,y:.53,lane:.035,speed:.028,hp:1,name:"FREIGHTER 04",done:false}
  ];
  ui.intro.classList.add("hidden");ui.result.classList.add("hidden");ui.status.textContent="READY";ui.ticker.textContent="DAY 1 ACTIVE — FOUR VESSELS ENTERING THE STRAIT — PROTECT ALL SHIPPING —";updateHud();
 }
@@ -52,12 +52,13 @@ function drawSea(){
 }
 function coast(points){ctx.strokeStyle="#a8d93c";ctx.lineWidth=1.5;ctx.shadowColor="#72c83c";ctx.shadowBlur=5;ctx.beginPath();points.forEach((p,i)=>(i?ctx.lineTo(p[0]*W,p[1]*H):ctx.moveTo(p[0]*W,p[1]*H)));ctx.stroke();ctx.shadowBlur=0}
 function drawLand(){
- const north=[[0,0],[1,0],[1,.31],[.94,.29],[.88,.25],[.83,.22],[.76,.23],[.70,.19],[.64,.22],[.59,.19],[.54,.23],[.49,.25],[.44,.22],[.39,.26],[.34,.24],[.29,.28],[.24,.25],[.18,.29],[.12,.27],[.07,.31],[0,.29]];
- const south=[[0,.83],[.08,.80],[.16,.76],[.24,.75],[.31,.70],[.38,.67],[.44,.61],[.49,.55],[.54,.48],[.58,.50],[.61,.59],[.67,.66],[.75,.70],[.84,.74],[.92,.75],[1,.78],[1,1],[0,1]];
- poly(north,"#172d15");poly(south,"#183016");coast(north.slice(2));coast(south.slice(0,16));
- ctx.strokeStyle="#68a73922";ctx.lineWidth=.7;for(let i=0;i<34;i++){ctx.beginPath();ctx.moveTo((i*.079%1)*W,0);ctx.lineTo(((i*.079+.12)%1)*W,H*.28);ctx.stroke();ctx.beginPath();ctx.moveTo((i*.091%1)*W,H);ctx.lineTo(((i*.091+.07)%1)*W,H*.72);ctx.stroke()}
- poly([[W*.47,H*.31],[W*.52,H*.29],[W*.55,H*.32],[W*.51,H*.35]],"#1c3518","#95cc3d");
- poly([[W*.63,H*.27],[W*.66,H*.26],[W*.68,H*.28],[W*.65,H*.30]],"#1c3518","#95cc3d");
+ const north=[[0,0],[1,0],[1,.24],[.96,.25],[.92,.29],[.87,.30],[.83,.34],[.78,.35],[.74,.33],[.70,.35],[.66,.33],[.61,.36],[.56,.34],[.52,.38],[.47,.37],[.43,.40],[.38,.39],[.33,.43],[.28,.41],[.23,.44],[.18,.43],[.13,.47],[.08,.45],[.04,.49],[0,.48]];
+ const south=[[0,.74],[.06,.72],[.12,.69],[.18,.67],[.24,.63],[.30,.61],[.36,.57],[.42,.55],[.48,.51],[.53,.48],[.57,.50],[.59,.56],[.58,.62],[.61,.67],[.67,.70],[.73,.72],[.80,.75],[.88,.78],[.95,.79],[1,.81],[1,1],[0,1]];
+ poly(north,"#172d15");poly(south,"#183016");coast(north.slice(2));coast(south.slice(0,20));
+ ctx.strokeStyle="#68a73922";ctx.lineWidth=.7;for(let i=0;i<34;i++){ctx.beginPath();ctx.moveTo((i*.079%1)*W,0);ctx.lineTo(((i*.079+.12)%1)*W,H*.39);ctx.stroke();ctx.beginPath();ctx.moveTo((i*.091%1)*W,H);ctx.lineTo(((i*.091+.07)%1)*W,H*.66);ctx.stroke()}
+ poly([[W*.43,H*.43],[W*.48,H*.40],[W*.53,H*.42],[W*.50,H*.46],[W*.45,H*.47]],"#1c3518","#95cc3d");
+ poly([[W*.61,H*.38],[W*.65,H*.36],[W*.69,H*.37],[W*.67,H*.41],[W*.63,H*.42]],"#1c3518","#95cc3d");
+ poly([[W*.76,H*.35],[W*.78,H*.34],[W*.79,H*.36],[W*.77,H*.38]],"#1c3518","#95cc3d");
 }
 function drawLane(){ctx.save();ctx.strokeStyle="#8fe54899";ctx.lineWidth=1.5;ctx.setLineDash([8,10]);ctx.beginPath();ctx.moveTo(-20,H*.54);ctx.bezierCurveTo(W*.30,H*.63,W*.54,H*.37,W+20,H*.43);ctx.stroke();ctx.beginPath();ctx.moveTo(-20,H*.48);ctx.bezierCurveTo(W*.31,H*.56,W*.54,H*.31,W+20,H*.37);ctx.stroke();ctx.restore()}
 function drawInfrastructure(o,label){const x=sx(o.x),y=sy(o.y);ctx.save();ctx.translate(x,y);ctx.strokeStyle=o.hp?"#d8c849":"#863b24";ctx.lineWidth=1.5;ctx.strokeRect(-20,-10,40,13);ctx.beginPath();ctx.arc(-10,-11,6,Math.PI,0);ctx.arc(9,-11,6,Math.PI,0);ctx.stroke();ctx.fillStyle="#d8c849";ctx.font="10px Share Tech Mono";ctx.fillText(label,-31,19);ctx.restore()}
@@ -69,7 +70,7 @@ function drawObjects(){
  interceptors.forEach(i=>{ctx.strokeStyle="#b8fff0cc";ctx.lineWidth=2;ctx.beginPath();i.trail.forEach((p,n)=>n?ctx.lineTo(...p):ctx.moveTo(...p));ctx.stroke();ctx.fillStyle="#fff";ctx.fillRect(i.x-2,i.y-2,4,4)});
  blasts.forEach(b=>{const a=1-b.age/b.life;ctx.strokeStyle=(b.friendly?"rgba(185,255,224,":"rgba(255,113,56,")+a+")";ctx.lineWidth=2;ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,7);ctx.stroke()});sparks.forEach(s=>{ctx.fillStyle="#ffe164";ctx.fillRect(s.x,s.y,2,2)});
 }
-function drawLabels(){ctx.save();ctx.textAlign="center";ctx.fillStyle="#abd850aa";ctx.font="18px Share Tech Mono";ctx.fillText("I R A N",W*.55,H*.12);ctx.font="14px Share Tech Mono";ctx.fillText("U A E",W*.50,H*.84);ctx.fillText("O M A N",W*.73,H*.88);ctx.fillStyle="#8bc46c88";ctx.font="13px Share Tech Mono";ctx.fillText("P E R S I A N   G U L F",W*.18,H*.49);ctx.fillText("G U L F   O F   O M A N",W*.88,H*.55);ctx.fillStyle="#d8c849";ctx.font="11px Share Tech Mono";ctx.fillText("Qeshm Island",W*.50,H*.28);ctx.fillText("Hormuz Island",W*.66,H*.24);ctx.fillText("Dubai",W*.45,H*.75);ctx.fillText("Fujairah",W*.72,H*.72);ctx.save();ctx.translate(W*.48,H*.49);ctx.rotate(-.13);ctx.fillStyle="#9ee75b";ctx.fillText("EASTBOUND SHIPPING LANE",0,0);ctx.restore();ctx.restore()}
+function drawLabels(){ctx.save();ctx.textAlign="center";ctx.fillStyle="#abd850aa";ctx.font="18px Share Tech Mono";ctx.fillText("I R A N",W*.58,H*.16);ctx.font="14px Share Tech Mono";ctx.fillText("U A E",W*.33,H*.83);ctx.fillText("O M A N",W*.76,H*.88);ctx.fillStyle="#8bc46c88";ctx.font="13px Share Tech Mono";ctx.fillText("P E R S I A N   G U L F",W*.17,H*.56);ctx.fillText("G U L F   O F   O M A N",W*.85,H*.55);ctx.fillStyle="#d8c849";ctx.font="11px Share Tech Mono";ctx.fillText("Qeshm Island",W*.48,H*.39);ctx.fillText("Hormuz Island",W*.65,H*.34);ctx.fillText("Dubai",W*.45,H*.75);ctx.fillText("Fujairah",W*.72,H*.72);ctx.save();ctx.translate(W*.48,H*.49);ctx.rotate(-.13);ctx.fillStyle="#9ee75b";ctx.fillText("EASTBOUND SHIPPING LANE",0,0);ctx.restore();ctx.restore()}
 function render(){drawSea();drawLand();drawLane();drawLabels();drawObjects();if(paused){ctx.fillStyle="#020b07dd";ctx.fillRect(0,0,W,H);ctx.fillStyle="#a9ea55";ctx.font="700 48px Barlow Condensed";ctx.textAlign="center";ctx.fillText("PAUSED",W/2,H/2);ctx.textAlign="left"}}
 function loop(t){const dt=Math.min(.033,(t-last)/1000||0);last=t;update(dt);render();requestAnimationFrame(loop)}requestAnimationFrame(loop);
 canvas.addEventListener("pointerdown",e=>{const r=canvas.getBoundingClientRect();launch(e.clientX-r.left,e.clientY-r.top)});
