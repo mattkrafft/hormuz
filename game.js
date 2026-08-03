@@ -11,9 +11,8 @@ const MAP={
  qeshm:[[.557,.328],[.589,.333],[.605,.328],[.622,.325],[.626,.333],[.652,.319],[.659,.308],[.671,.305],[.66,.294],[.629,.299],[.615,.291],[.617,.311],[.587,.316]],
  hormuz:[[.688,.297],[.691,.302],[.697,.297],[.694,.291]],
  larak:[[.671,.328],[.684,.325],[.677,.314]],
- eastbound:[[.164,0],[.193,.186],[.353,.393],[.551,.418],[.645,.395],[.669,.449],[.66,.531],[.69,.72],[.767,.805],[1,.955]],
- westbound:[[1,.712],[.771,.61],[.723,.5],[.707,.37],[.659,.345],[.478,.347],[.346,.266],[.27,.172],[.25,0]],
- westbound:[[1,.587],[.771,.503],[.723,.413],[.707,.305],[.659,.284],[.478,.287],[.346,.219],[.27,.142],[.25,0]]
+ eastbound:[[.164,0],[.193,.186],[.353,.393],[.551,.418],[.645,.395],[.677,.449],[.66,.531],[.69,.72],[.767,.805],[1,.955]],
+ westbound:[[1,.712],[.771,.61],[.723,.5],[.707,.37],[.659,.345],[.478,.347],[.346,.266],[.27,.172],[.25,0]]
 };
 function routeSample(points,t){
  const lengths=[];let total=0;
@@ -68,7 +67,14 @@ function finish(){
  ui.resultCopy.textContent=saved+" of 4 vessels cleared · "+lost+" lost · Closing gas price $"+gas.toFixed(2);
  ui.result.classList.remove("hidden");ui.status.textContent="COMPLETE";ui.ticker.textContent="DAY 1 COMPLETE — "+saved+" TRANSITS — "+lost+" LOSSES — CLOSING GAS PRICE $"+gas.toFixed(2)+" —";
 }
-function poly(points,fill,stroke){ctx.beginPath();points.forEach((p,i)=>(i?ctx.lineTo(...p):ctx.moveTo(...p)));ctx.closePath();ctx.fillStyle=fill;ctx.fill();if(stroke){ctx.strokeStyle=stroke;ctx.stroke()}}
+function polygonPath(points){ctx.beginPath();points.forEach((p,i)=>(i?ctx.lineTo(...p):ctx.moveTo(...p)));ctx.closePath()}
+function poly(points,fill,stroke){polygonPath(points);ctx.fillStyle=fill;ctx.fill();if(stroke){ctx.strokeStyle=stroke;ctx.stroke()}}
+function hatchPolygon(points,spacing=24,slant=.12){
+ ctx.save();polygonPath(points);ctx.clip();ctx.strokeStyle="#68a73922";ctx.lineWidth=.7;
+ const shift=W*slant,margin=Math.abs(shift)+spacing;
+ for(let x=-margin;x<W+margin;x+=spacing){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x+shift,H);ctx.stroke()}
+ ctx.restore();
+}
 function drawSea(){
  const g=ctx.createRadialGradient(W*.62,H*.44,10,W*.55,H*.45,W*.75);g.addColorStop(0,"#123c25");g.addColorStop(.55,"#092719");g.addColorStop(1,"#03140d");ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
  ctx.save();ctx.strokeStyle="#91d84b18";ctx.lineWidth=1;for(let y=H*.13;y<H;y+=20){ctx.beginPath();for(let x=-40;x<=W+40;x+=30)ctx.lineTo(x,y+Math.sin(x*.021+y*.012)*2);ctx.stroke()}ctx.restore();
@@ -76,10 +82,11 @@ function drawSea(){
 function coast(points){ctx.strokeStyle="#a8d93c";ctx.lineWidth=1.5;ctx.shadowColor="#72c83c";ctx.shadowBlur=5;ctx.beginPath();points.forEach((p,i)=>(i?ctx.lineTo(p[0]*W,p[1]*H):ctx.moveTo(p[0]*W,p[1]*H)));ctx.stroke();ctx.shadowBlur=0}
 function pixels(points){return points.map(([x,y])=>[sx(x),sy(y)])}
 function drawLand(){
- const northLand=[[0,0],...MAP.north,[1,0]],southLand=[...MAP.south,[1,1],[0,1],[0,0]];
- poly(pixels(northLand),"#172d15");poly(pixels(southLand),"#183016");coast(MAP.north);coast(MAP.south);
- ctx.strokeStyle="#68a73922";ctx.lineWidth=.7;for(let i=0;i<34;i++){ctx.beginPath();ctx.moveTo((i*.079%1)*W,0);ctx.lineTo(((i*.079+.12)%1)*W,H*.39);ctx.stroke();ctx.beginPath();ctx.moveTo((i*.091%1)*W,H);ctx.lineTo(((i*.091+.07)%1)*W,H*.66);ctx.stroke()}
- [MAP.qeshm,MAP.hormuz,MAP.larak].forEach(island=>poly(pixels(island),"#1c3518","#95cc3d"));
+ const northLand=pixels([[0,0],...MAP.north,[1,0]]),southLand=pixels([...MAP.south,[1,1],[0,1],[0,0]]);
+ poly(northLand,"#172d15");hatchPolygon(northLand);
+ poly(southLand,"#183016");hatchPolygon(southLand);
+ [MAP.qeshm,MAP.hormuz,MAP.larak].forEach(island=>{const shape=pixels(island);poly(shape,"#1c3518");hatchPolygon(shape,7);poly(shape,"transparent","#95cc3d")});
+ coast(MAP.north);coast(MAP.south);
 }
 function traceRoute(points){ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(sx(x),sy(y)):ctx.moveTo(sx(x),sy(y)));ctx.stroke()}
 function drawLane(){ctx.save();ctx.lineWidth=1.25;ctx.setLineDash([6,8]);ctx.strokeStyle="#8fe548aa";traceRoute(MAP.eastbound);ctx.strokeStyle="#74bd4290";traceRoute(MAP.westbound);ctx.restore()}
