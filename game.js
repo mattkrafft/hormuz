@@ -72,13 +72,13 @@ function spawnThreat(){
  const threat={x,y,startX:x,startY:y,tx,ty,target,age:0,duration:distance/(kind==="missile"?92+Math.random()*28:58+Math.random()*18),trail:[]};
  (kind==="missile"?missiles:drones).push(threat);
 }
-function blast(x,y,max=70,friendly=true){blasts.push({x,y,r:2,max,age:0,life:1.15,friendly});for(let i=0;i<14;i++)sparks.push({x,y,vx:(Math.random()-.5)*180,vy:(Math.random()-.5)*180,age:0,life:.35+Math.random()*.4})}
+function blast(x,y,max=70,friendly=true){blasts.push({x,y,r:2,max,age:0,life:1.15,friendly,hitSites:new Set()});for(let i=0;i<14;i++)sparks.push({x,y,vx:(Math.random()-.5)*180,vy:(Math.random()-.5)*180,age:0,life:.35+Math.random()*.4})}
 function hitTarget(m){
  blast(m.tx,m.ty,50,false);
  const radius=Math.min(W,H)*.055;
  const candidates=[...ships.filter(s=>s.hp>0&&!s.done),refinery,terminal];
  const hit=candidates.filter(t=>t.hp>0&&Math.hypot(sx(t.x)-m.tx,sy(t.y)-m.ty)<=radius).sort((a,b)=>Math.hypot(sx(a.x)-m.tx,sy(a.y)-m.ty)-Math.hypot(sx(b.x)-m.tx,sy(b.y)-m.ty))[0];
- if(hit){hit.hp--;gas=Math.min(7.99,gas+(hit===refinery||hit===terminal?.28:.18));updateHud()}
+ if(hit){hit.hp--;gas=Math.min(7.99,gas+((hit===refinery||hit===terminal)?.28:.18));updateHud()}
 }
 function update(dt){
  if(state!=="playing"||paused)return;elapsed+=dt;spawnClock+=dt;
@@ -87,7 +87,7 @@ function update(dt){
  interceptors.forEach(i=>{const dx=i.tx-i.x,dy=i.ty-i.y,d=Math.hypot(dx,dy);i.trail.push([i.x,i.y]);if(i.trail.length>14)i.trail.shift();if(d<i.speed*dt){i.dead=true;blast(i.tx,i.ty,74,true)}else{i.x+=dx/d*i.speed*dt;i.y+=dy/d*i.speed*dt}});
  missiles.forEach(m=>{m.tx=sx(m.target.object.x);m.ty=sy(m.target.object.y);m.age+=dt;const t=Math.min(1,m.age/m.duration),u=1-t,controlX=(m.startX+m.tx)/2,controlY=Math.min(m.startY,m.ty)-H*MISSILE_ARC;m.trail.push([m.x,m.y]);if(m.trail.length>24)m.trail.shift();m.x=u*u*m.startX+2*u*t*controlX+t*t*m.tx;m.y=u*u*m.startY+2*u*t*controlY+t*t*m.ty;if(t>=1){m.dead=true;hitTarget(m)}});
  drones.forEach(d=>{d.tx=sx(d.target.object.x);d.ty=sy(d.target.object.y);d.age+=dt;const t=Math.min(1,d.age/d.duration);d.trail.push([d.x,d.y]);if(d.trail.length>18)d.trail.shift();d.x=d.startX+(d.tx-d.startX)*t;d.y=d.startY+(d.ty-d.startY)*t;if(t>=1){d.dead=true;hitTarget(d)}});
- blasts.forEach(b=>{b.age+=dt;const p=b.age/b.life;b.r=Math.sin(Math.min(1,p)*Math.PI)*b.max;if(b.age>b.life)b.dead=true;if(b.friendly){[...missiles,...drones].forEach(m=>{if(!m.dead&&Math.hypot(m.x-b.x,m.y-b.y)<b.r){m.dead=true;blast(m.x,m.y,44,true)}});enemySites.forEach(site=>{if(site.hp>0&&Math.hypot(sx(site.x)-b.x,sy(site.y)-b.y)<b.r){site.hp--;blast(sx(site.x),sy(site.y),38,true)}})}});
+ blasts.forEach(b=>{b.age+=dt;const p=b.age/b.life;b.r=Math.sin(Math.min(1,p)*Math.PI)*b.max;if(b.age>b.life)b.dead=true;if(b.friendly){[...missiles,...drones].forEach(m=>{if(!m.dead&&Math.hypot(m.x-b.x,m.y-b.y)<b.r){m.dead=true;blast(m.x,m.y,44,true)}});enemySites.forEach(site=>{if(site.hp>0&&!b.hitSites.has(site)&&Math.hypot(sx(site.x)-b.x,sy(site.y)-b.y)<b.r){b.hitSites.add(site);site.hp--;blast(sx(site.x),sy(site.y),38,true)}})}});
  sparks.forEach(s=>{s.age+=dt;s.x+=s.vx*dt;s.y+=s.vy*dt;s.vy+=90*dt;if(s.age>s.life)s.dead=true});
  missiles=missiles.filter(x=>!x.dead);drones=drones.filter(x=>!x.dead);interceptors=interceptors.filter(x=>!x.dead);blasts=blasts.filter(x=>!x.dead);sparks=sparks.filter(x=>!x.dead);
  if(ships.length&&ships.every(s=>s.done||s.hp<=0))finish();
