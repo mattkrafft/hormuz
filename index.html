@@ -1,44 +1,7 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#06131a">
-  <title>Hormuz Command — Day 1</title>
-  <link rel="stylesheet" href="style.css?v=20260803-2">
-</head>
-<body>
-  <main id="game-shell">
-    <header class="hud">
-      <section><span class="label">U.S. GAS</span><strong id="gas-price">$3.41</strong><small id="gas-change">▲ $0.00</small></section>
-      <section class="title"><h1>HORMUZ <em>COMMAND</em></h1><span>DAY 1 · STRAIT DEFENSE</span></section>
-      <section class="right"><span class="label">INTERCEPTORS</span><strong id="ammo">18</strong><small id="status">STANDBY</small></section>
-    </header>
-
-    <section id="stage" aria-label="Hormuz Command game area">
-      <canvas id="game"></canvas>
-      <div class="scanlines"></div>
-      <div id="intro" class="overlay">
-        <p class="eyebrow">BREAKING // PERSIAN GULF</p>
-        <h2>IRAN HAS CLOSED<br>THE STRAIT OF HORMUZ</h2>
-        <p>Defend allied shipping. Every vessel that clears the strait pushes gas prices down. Every loss sends them higher.</p>
-        <button id="start">CLICK ANYWHERE TO BEGIN</button>
-      </div>
-      <div id="result" class="overlay hidden">
-        <p class="eyebrow" id="result-kicker">DAY 1 COMPLETE</p>
-        <h2 id="result-title">STRAIT HELD</h2>
-        <p id="result-copy"></p>
-        <button id="restart">REPLAY DAY 1</button>
-      </div>
-      <div id="ticker"><span id="ticker-text">IRAN HAS CLOSED THE STRAIT OF HORMUZ · CLICK ANYWHERE TO BEGIN · DEFEND ALLIED SHIPPING ·</span></div>
-    </section>
-
-    <footer>
-      <span>CLICK / TAP TO LAUNCH</span>
-      <span>DESTROY INCOMING MISSILES BEFORE IMPACT</span>
-      <span>ESC PAUSES</span>
-    </footer>
-  </main>
-  <script src="game.js?v=20260803-2"></script>
-</body>
-</html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#071109"><title>Hormuz Command — Day 1</title><link rel="stylesheet" href="style.css?v=20260803-3"></head><body>
+<main id="cabinet"><section id="screen"><header class="hud"><section class="gas"><span class="label">U.S. GAS</span><strong id="gas-price">$3.47</strong><small id="gas-change">▲ +0.00</small></section><section class="title"><h1>— ★★★ HORMUZ COMMAND ★★★ —</h1></section><section class="score"><span>DAY <b>01</b></span><span>TRANSITS <b id="transits">00</b></span><span>LOSSES <b id="losses">00</b></span></section></header>
+<section id="stage"><canvas id="game"></canvas><aside id="systems"><span class="label">INTERCEPTORS</span><strong id="ammo">18</strong><div class="missiles">▲ ▲ ▲ ▲ ▲</div><div class="radar"><i></i></div><b id="status">STANDBY</b><small>ALL SYSTEMS GO</small></aside><div class="scanlines"></div>
+<div id="intro" class="overlay"><p class="eyebrow">BREAKING // PERSIAN GULF</p><h2>IRAN HAS CLOSED<br>THE STRAIT OF HORMUZ</h2><p>Defend four allied vessels until they clear the strait. The day ends when every ship has escaped or been destroyed.</p><button id="start">CLICK ANYWHERE TO BEGIN</button></div>
+<div id="result" class="overlay hidden"><p class="eyebrow">DAY 1 COMPLETE</p><h2 id="result-title">STRAIT HELD</h2><p id="result-copy"></p><button id="restart">REPLAY DAY 1</button></div>
+<div id="ticker"><span id="ticker-text">IRAN HAS CLOSED THE STRAIT OF HORMUZ — CLICK ANYWHERE TO BEGIN — FOUR VESSELS AWAIT TRANSIT —</span></div></section></section>
+<footer><span>POWER ●</span><span>BRIGHTNESS ◉</span><strong>CRT TERMINAL<br><small>MODEL 7700</small></strong><span>CONTRAST ◉</span><span>PERSISTENCE ◉</span></footer></main><script src="game.js?v=20260803-3"></script></body></html>
