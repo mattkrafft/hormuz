@@ -2,6 +2,7 @@
 const canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
 const ui={gas:document.getElementById("gas-price"),change:document.getElementById("gas-change"),ammo:document.getElementById("ammo"),status:document.getElementById("status"),intro:document.getElementById("intro"),result:document.getElementById("result"),resultTitle:document.getElementById("result-title"),resultCopy:document.getElementById("result-copy"),ticker:document.getElementById("ticker-text"),transits:document.getElementById("transits"),losses:document.getElementById("losses")};
 let W=0,H=0,dpr=1,state="intro",last=0,elapsed=0,spawnClock=0,spawned=0,ammo=18,gas=3.47,startGas=3.47,paused=false;
+let missileArc=.22;
 let missiles=[],interceptors=[],blasts=[],ships=[],sparks=[];
 const TOTAL_MISSILES=16;
 
@@ -26,6 +27,18 @@ function routeSample(points,t){
 function placeShip(s){const p=routeSample(MAP.eastbound,s.progress);s.x=p.x;s.y=p.y;s.angle=p.angle}
 
 const battery={x:.63,y:.70},refinery={x:.62,y:.72,hp:2},terminal={x:.26,y:.78,hp:2};
+const TARGET_ZONES=[
+ {kind:"route",progress:.28},
+ {kind:"route",progress:.48},
+ {kind:"route",progress:.68},
+ {kind:"route",progress:.84},
+ {kind:"base",object:refinery,dx:-.012,dy:.008},
+ {kind:"base",object:terminal,dx:.014,dy:-.006}
+];
+function targetPoint(zone){
+ if(zone.kind==="route"){const p=routeSample(MAP.eastbound,zone.progress);return{x:p.x,y:p.y}}
+ return{x:zone.object.x+zone.dx,y:zone.object.y+zone.dy}
+}
 
 function resize(){const r=canvas.getBoundingClientRect();dpr=Math.min(devicePixelRatio||1,2);W=r.width;H=r.height;canvas.width=W*dpr;canvas.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
 addEventListener("resize",resize);resize();
@@ -44,18 +57,25 @@ function outcomes(){return{saved:ships.filter(s=>s.done).length,lost:ships.filte
 function updateHud(){const o=outcomes();ui.gas.textContent="$"+gas.toFixed(2);const d=gas-startGas;ui.change.textContent=(d>=0?"▲ +":"▼ -")+Math.abs(d).toFixed(2);ui.change.style.color=d>0?"#ff7138":"#9ee75b";ui.ammo.textContent=String(ammo).padStart(2,"0");ui.transits.textContent=String(o.saved).padStart(2,"0");ui.losses.textContent=String(o.lost).padStart(2,"0")}
 function launch(x,y){if(state!=="playing"||paused||ammo<=0||y>H*.90)return;ammo--;interceptors.push({x:sx(battery.x),y:sy(battery.y),tx:x,ty:y,speed:620,trail:[]});updateHud()}
 function spawnMissile(){
- const targets=[...ships.filter(s=>s.hp>0&&!s.done),refinery,terminal];if(!targets.length)return;
- const t=targets[Math.floor(Math.random()*targets.length)],tx=t.x+(Math.random()-.5)*.025,ty=t.y;
- missiles.push({x:sx(.30+Math.random()*.62),y:sy(.05+Math.random()*.10),tx:sx(tx),ty:sy(ty),speed:75+Math.random()*32,target:t,trail:[]});spawned++;
+ const zone=TARGET_ZONES[Math.floor(Math.random()*TARGET_ZONES.length)],target=targetPoint(zone);
+ const x=sx(.30+Math.random()*.62),y=sy(.05+Math.random()*.10),tx=sx(target.x),ty=sy(target.y);
+ const distance=Math.hypot(tx-x,ty-y),duration=distance/(75+Math.random()*32);
+ missiles.push({x,y,startX:x,startY:y,tx,ty,zone,age:0,duration,trail:[]});spawned++;
 }
 function blast(x,y,max=70,friendly=true){blasts.push({x,y,r:2,max,age:0,life:1.15,friendly});for(let i=0;i<14;i++)sparks.push({x,y,vx:(Math.random()-.5)*180,vy:(Math.random()-.5)*180,age:0,life:.35+Math.random()*.4})}
-function hitTarget(m){if(m.target.hp<=0||m.target.done)return;m.target.hp--;blast(m.tx,m.ty,50,false);gas=Math.min(7.99,gas+(m.target===refinery||m.target===terminal?.28:.18));updateHud()}
+function hitTarget(m){
+ blast(m.tx,m.ty,50,false);
+ const radius=Math.min(W,H)*.055;
+ const candidates=[...ships.filter(s=>s.hp>0&&!s.done),refinery,terminal];
+ const hit=candidates.filter(t=>t.hp>0&&Math.hypot(sx(t.x)-m.tx,sy(t.y)-m.ty)<=radius).sort((a,b)=>Math.hypot(sx(a.x)-m.tx,sy(a.y)-m.ty)-Math.hypot(sx(b.x)-m.tx,sy(b.y)-m.ty))[0];
+ if(hit){hit.hp--;gas=Math.min(7.99,gas+(hit===refinery||hit===terminal?.28:.18));updateHud()}
+}
 function update(dt){
  if(state!=="playing"||paused)return;elapsed+=dt;spawnClock+=dt;
  if(spawned<TOTAL_MISSILES&&spawnClock>Math.max(.58,1.35-elapsed*.012)){spawnClock=0;spawnMissile()}
  ships.forEach(s=>{if(s.hp>0&&!s.done){s.progress+=s.speed*dt;placeShip(s);if(s.progress>1.04){s.done=true;gas=Math.max(1.5,gas-.14);updateHud()}}});
  interceptors.forEach(i=>{const dx=i.tx-i.x,dy=i.ty-i.y,d=Math.hypot(dx,dy);i.trail.push([i.x,i.y]);if(i.trail.length>14)i.trail.shift();if(d<i.speed*dt){i.dead=true;blast(i.tx,i.ty,74,true)}else{i.x+=dx/d*i.speed*dt;i.y+=dy/d*i.speed*dt}});
- missiles.forEach(m=>{if(m.target.done||m.target.hp<=0){m.dead=true;return}const dx=m.tx-m.x,dy=m.ty-m.y,d=Math.hypot(dx,dy);m.trail.push([m.x,m.y]);if(m.trail.length>24)m.trail.shift();if(d<m.speed*dt){m.dead=true;hitTarget(m)}else{m.x+=dx/d*m.speed*dt;m.y+=dy/d*m.speed*dt}});
+ missiles.forEach(m=>{m.age+=dt;const t=Math.min(1,m.age/m.duration),u=1-t,controlX=(m.startX+m.tx)/2,controlY=Math.min(m.startY,m.ty)-H*missileArc;m.trail.push([m.x,m.y]);if(m.trail.length>24)m.trail.shift();m.x=u*u*m.startX+2*u*t*controlX+t*t*m.tx;m.y=u*u*m.startY+2*u*t*controlY+t*t*m.ty;if(t>=1){m.dead=true;hitTarget(m)}});
  blasts.forEach(b=>{b.age+=dt;const p=b.age/b.life;b.r=Math.sin(Math.min(1,p)*Math.PI)*b.max;if(b.age>b.life)b.dead=true;if(b.friendly)missiles.forEach(m=>{if(!m.dead&&Math.hypot(m.x-b.x,m.y-b.y)<b.r){m.dead=true;blast(m.x,m.y,44,true)}})});
  sparks.forEach(s=>{s.age+=dt;s.x+=s.vx*dt;s.y+=s.vy*dt;s.vy+=90*dt;if(s.age>s.life)s.dead=true});
  missiles=missiles.filter(x=>!x.dead);interceptors=interceptors.filter(x=>!x.dead);blasts=blasts.filter(x=>!x.dead);sparks=sparks.filter(x=>!x.dead);
@@ -93,8 +113,14 @@ function drawLane(){ctx.save();ctx.lineWidth=1.25;ctx.setLineDash([6,8]);ctx.str
 function drawInfrastructure(o){const x=sx(o.x),y=sy(o.y);ctx.save();ctx.translate(x,y);ctx.strokeStyle=o.hp?"#d8c849":"#863b24";ctx.lineWidth=1.5;ctx.strokeRect(-20,-10,40,13);ctx.beginPath();ctx.arc(-10,-11,6,Math.PI,0);ctx.arc(9,-11,6,Math.PI,0);ctx.stroke();ctx.restore()}
 function drawShip(s){if(s.hp<=0){ctx.fillStyle="#6f351f";ctx.fillRect(sx(s.x)-14,sy(s.y),29,2);return}if(s.done)return;const x=sx(s.x),y=sy(s.y);ctx.save();ctx.translate(x,y);ctx.rotate(s.angle||0);ctx.scale(.78,.78);poly([[-28,-4],[26,-4],[19,6],[-22,6]],"#18331b","#b7e34b");ctx.fillStyle="#9fd947";ctx.fillRect(-8,-13,20,8);ctx.fillRect(-20,-9,9,4);ctx.fillRect(14,-9,7,4);ctx.fillRect(1,-20,3,7);ctx.restore()}
 function drawBattery(){const x=sx(battery.x),y=sy(battery.y);ctx.strokeStyle="#d8c849";ctx.lineWidth=2;ctx.strokeRect(x-18,y-6,36,12);ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(x,y-7);ctx.lineTo(x+14,y-25);ctx.stroke()}
+function drawTargetZones(){
+ ctx.save();ctx.strokeStyle="#ff9b4daa";ctx.lineWidth=1;ctx.setLineDash([3,3]);
+ const active=new Set(missiles.map(m=>m.zone));
+ active.forEach(zone=>{const p=targetPoint(zone),x=sx(p.x),y=sy(p.y);ctx.beginPath();ctx.arc(x,y,7,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.moveTo(x-10,y);ctx.lineTo(x+10,y);ctx.moveTo(x,y-10);ctx.lineTo(x,y+10);ctx.stroke()});
+ ctx.restore();
+}
 function drawObjects(){
- drawInfrastructure(refinery);drawInfrastructure(terminal);ships.forEach(drawShip);drawBattery();
+ drawTargetZones();drawInfrastructure(refinery);drawInfrastructure(terminal);ships.forEach(drawShip);drawBattery();
  missiles.forEach(m=>{ctx.strokeStyle="#ff7138bb";ctx.lineWidth=2;ctx.beginPath();m.trail.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));ctx.stroke();ctx.fillStyle="#ffb04d";ctx.beginPath();ctx.arc(m.x,m.y,3,0,7);ctx.fill()});
  interceptors.forEach(i=>{ctx.strokeStyle="#b8fff0cc";ctx.lineWidth=2;ctx.beginPath();i.trail.forEach((p,n)=>n?ctx.lineTo(...p):ctx.moveTo(...p));ctx.stroke();ctx.fillStyle="#fff";ctx.fillRect(i.x-2,i.y-2,4,4)});
  blasts.forEach(b=>{const a=1-b.age/b.life;ctx.strokeStyle=(b.friendly?"rgba(185,255,224,":"rgba(255,113,56,")+a+")";ctx.lineWidth=2;ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,7);ctx.stroke()});sparks.forEach(s=>{ctx.fillStyle="#ffe164";ctx.fillRect(s.x,s.y,2,2)});
@@ -104,3 +130,7 @@ function loop(t){const dt=Math.min(.033,(t-last)/1000||0);last=t;update(dt);rend
 canvas.addEventListener("pointerdown",e=>{const r=canvas.getBoundingClientRect();launch(e.clientX-r.left,e.clientY-r.top)});
 document.getElementById("start").onclick=reset;ui.intro.addEventListener("click",e=>{if(e.target!==document.getElementById("start"))reset()});document.getElementById("restart").onclick=reset;
 addEventListener("keydown",e=>{if(e.key==="Escape"&&state==="playing"){paused=!paused;ui.status.textContent=paused?"PAUSED":"READY"}});
+
+const arcSlider=document.getElementById("missile-arc");
+const arcValue=document.getElementById("missile-arc-value");
+arcSlider.addEventListener("input",()=>{missileArc=Number(arcSlider.value);arcValue.textContent=missileArc.toFixed(2)});
