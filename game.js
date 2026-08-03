@@ -2,9 +2,9 @@
 const canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
 const ui={gas:document.getElementById("gas-price"),change:document.getElementById("gas-change"),ammo:document.getElementById("ammo"),status:document.getElementById("status"),intro:document.getElementById("intro"),result:document.getElementById("result"),resultTitle:document.getElementById("result-title"),resultCopy:document.getElementById("result-copy"),ticker:document.getElementById("ticker-text"),transits:document.getElementById("transits"),losses:document.getElementById("losses")};
 let W=0,H=0,dpr=1,state="intro",last=0,elapsed=0,spawnClock=0,spawned=0,ammo=18,gas=3.47,startGas=3.47,paused=false;
-let missileArc=.22;
-let missiles=[],interceptors=[],blasts=[],ships=[],sparks=[];
-const TOTAL_MISSILES=16;
+const MISSILE_ARC=.22;
+let missiles=[],drones=[],interceptors=[],blasts=[],ships=[],sparks=[];
+const TOTAL_MISSILES=16,TOTAL_DRONES=10;
 
 const MAP={
  north:[[.276,0],[.283,.008],[.273,.028],[.286,.034],[.285,.042],[.275,.048],[.285,.054],[.28,.076],[.284,.099],[.28,.116],[.292,.136],[.323,.138],[.333,.158],[.357,.184],[.348,.189],[.359,.201],[.362,.212],[.404,.246],[.401,.26],[.417,.271],[.436,.268],[.451,.282],[.465,.285],[.474,.291],[.505,.322],[.557,.299],[.572,.311],[.583,.311],[.59,.302],[.598,.288],[.628,.282],[.63,.285],[.645,.282],[.661,.274],[.682,.277],[.721,.294],[.738,.328],[.738,.367],[.733,.381],[.74,.412],[.745,.424],[.738,.441],[.743,.455],[.745,.477],[.786,.503],[.779,.52],[.793,.528],[.801,.514],[.811,.517],[.818,.537],[.827,.545],[.855,.545],[.878,.556],[.906,.573],[.932,.607],[.951,.599],[.961,.607],[.978,.602],[.99,.621],[1,.621]],
@@ -24,43 +24,53 @@ function routeSample(points,t){
  let i=0;while(lengths[i]<target)i++;const prev=i?lengths[i-1]:0,a=points[i],b=points[i+1],u=(target-prev)/(lengths[i]-prev);
  return{x:a[0]+(b[0]-a[0])*u,y:a[1]+(b[1]-a[1])*u,angle:Math.atan2((b[1]-a[1])*H,(b[0]-a[0])*W)}
 }
-function placeShip(s){const p=routeSample(MAP.eastbound,s.progress);s.x=p.x;s.y=p.y;s.angle=p.angle}
+function placeShip(s){const p=routeSample(s.route,s.progress);s.x=p.x;s.y=p.y;s.angle=p.angle}
 
 const battery={x:.63,y:.70},refinery={x:.62,y:.72,hp:2},terminal={x:.26,y:.78,hp:2};
-const TARGET_ZONES=[
- {kind:"route",progress:.28},
- {kind:"route",progress:.48},
- {kind:"route",progress:.68},
- {kind:"route",progress:.84},
- {kind:"base",object:refinery,dx:-.012,dy:.008},
- {kind:"base",object:terminal,dx:.014,dy:-.006}
+const missileSites=[
+ {x:.43,y:.115,hp:2,type:"missile"},{x:.61,y:.18,hp:2,type:"missile"},{x:.84,y:.30,hp:2,type:"missile"}
 ];
-function targetPoint(zone){
- if(zone.kind==="route"){const p=routeSample(MAP.eastbound,zone.progress);return{x:p.x,y:p.y}}
- return{x:zone.object.x+zone.dx,y:zone.object.y+zone.dy}
+const droneSites=[
+ {x:.36,y:.205,hp:1,type:"drone"},{x:.70,y:.255,hp:1,type:"drone"},{x:.91,y:.49,hp:1,type:"drone"}
+];
+const enemySites=[...missileSites,...droneSites];
+function choose(list){return list[Math.floor(Math.random()*list.length)]}
+function attackTarget(kind){
+ const liveShips=ships.filter(s=>s.hp>0&&!s.done);
+ const candidates=kind==="missile"?[...liveShips,...[refinery,terminal].filter(o=>o.hp>0)]:liveShips;
+ if(!candidates.length)return null;
+ const object=choose(candidates);
+ return{object,x:object.x,y:object.y,kind:object===refinery||object===terminal?"base":"ship"};
 }
 
 function resize(){const r=canvas.getBoundingClientRect();dpr=Math.min(devicePixelRatio||1,2);W=r.width;H=r.height;canvas.width=W*dpr;canvas.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
 addEventListener("resize",resize);resize();
 function sx(v){return v*W} function sy(v){return v*H}
 function reset(){
- state="playing";elapsed=spawnClock=0;spawned=0;ammo=18;gas=startGas;missiles=[];interceptors=[];blasts=[];sparks=[];refinery.hp=2;terminal.hp=2;
+ state="playing";elapsed=spawnClock=0;spawned=0;ammo=18;gas=startGas;missiles=[];drones=[];interceptors=[];blasts=[];sparks=[];refinery.hp=2;terminal.hp=2;enemySites.forEach(s=>s.hp=s.type==="missile"?2:1);
  ships=[
-  {progress:-.04,speed:.040,hp:1,name:"TANKER 01",done:false},
-  {progress:-.20,speed:.038,hp:1,name:"CARRIER 02",done:false},
-  {progress:-.36,speed:.036,hp:1,name:"TANKER 03",done:false},
-  {progress:-.52,speed:.034,hp:1,name:"FREIGHTER 04",done:false}
+  {progress:-.04,speed:.040,hp:1,name:"TANKER 01",done:false,route:MAP.eastbound},
+  {progress:-.20,speed:.038,hp:1,name:"CARRIER 02",done:false,route:MAP.eastbound},
+  {progress:-.36,speed:.036,hp:1,name:"TANKER 03",done:false,route:MAP.eastbound},
+  {progress:-.52,speed:.034,hp:1,name:"FREIGHTER 04",done:false,route:MAP.eastbound},
+  {progress:-.06,speed:.039,hp:1,name:"TANKER 05",done:false,route:MAP.westbound},
+  {progress:-.30,speed:.035,hp:1,name:"FREIGHTER 06",done:false,route:MAP.westbound}
  ];ships.forEach(placeShip);
- ui.intro.classList.add("hidden");ui.result.classList.add("hidden");ui.status.textContent="READY";ui.ticker.textContent="DAY 1 ACTIVE — FOUR VESSELS ENTERING THE STRAIT — PROTECT ALL SHIPPING —";updateHud();
+ ui.intro.classList.add("hidden");ui.result.classList.add("hidden");ui.status.textContent="READY";ui.ticker.textContent="DAY 1 ACTIVE — SIX VESSELS TRANSITING BOTH DIRECTIONS — DESTROY HOSTILE LAUNCH SITES —";updateHud();
 }
 function outcomes(){return{saved:ships.filter(s=>s.done).length,lost:ships.filter(s=>s.hp<=0).length}}
 function updateHud(){const o=outcomes();ui.gas.textContent="$"+gas.toFixed(2);const d=gas-startGas;ui.change.textContent=(d>=0?"▲ +":"▼ -")+Math.abs(d).toFixed(2);ui.change.style.color=d>0?"#ff7138":"#9ee75b";ui.ammo.textContent=String(ammo).padStart(2,"0");ui.transits.textContent=String(o.saved).padStart(2,"0");ui.losses.textContent=String(o.lost).padStart(2,"0")}
 function launch(x,y){if(state!=="playing"||paused||ammo<=0||y>H*.90)return;ammo--;interceptors.push({x:sx(battery.x),y:sy(battery.y),tx:x,ty:y,speed:620,trail:[]});updateHud()}
-function spawnMissile(){
- const zone=TARGET_ZONES[Math.floor(Math.random()*TARGET_ZONES.length)],target=targetPoint(zone);
- const x=sx(.30+Math.random()*.62),y=sy(.05+Math.random()*.10),tx=sx(target.x),ty=sy(target.y);
- const distance=Math.hypot(tx-x,ty-y),duration=distance/(75+Math.random()*32);
- missiles.push({x,y,startX:x,startY:y,tx,ty,zone,age:0,duration,trail:[]});spawned++;
+function spawnThreat(){
+ const missileCount=spawned<TOTAL_MISSILES,droneCount=spawned>=TOTAL_MISSILES&&spawned<TOTAL_MISSILES+TOTAL_DRONES;
+ const kind=missileCount?"missile":droneCount?"drone":null;
+ if(!kind)return;
+ const sites=(kind==="missile"?missileSites:droneSites).filter(s=>s.hp>0),target=attackTarget(kind);
+ spawned++;
+ if(!sites.length||!target)return;
+ const site=choose(sites),x=sx(site.x),y=sy(site.y),tx=sx(target.x),ty=sy(target.y),distance=Math.hypot(tx-x,ty-y);
+ const threat={x,y,startX:x,startY:y,tx,ty,target,age:0,duration:distance/(kind==="missile"?92+Math.random()*28:58+Math.random()*18),trail:[]};
+ (kind==="missile"?missiles:drones).push(threat);
 }
 function blast(x,y,max=70,friendly=true){blasts.push({x,y,r:2,max,age:0,life:1.15,friendly});for(let i=0;i<14;i++)sparks.push({x,y,vx:(Math.random()-.5)*180,vy:(Math.random()-.5)*180,age:0,life:.35+Math.random()*.4})}
 function hitTarget(m){
@@ -72,19 +82,20 @@ function hitTarget(m){
 }
 function update(dt){
  if(state!=="playing"||paused)return;elapsed+=dt;spawnClock+=dt;
- if(spawned<TOTAL_MISSILES&&spawnClock>Math.max(.58,1.35-elapsed*.012)){spawnClock=0;spawnMissile()}
+ if(spawned<TOTAL_MISSILES+TOTAL_DRONES&&spawnClock>Math.max(.58,1.28-elapsed*.011)){spawnClock=0;spawnThreat()}
  ships.forEach(s=>{if(s.hp>0&&!s.done){s.progress+=s.speed*dt;placeShip(s);if(s.progress>1.04){s.done=true;gas=Math.max(1.5,gas-.14);updateHud()}}});
  interceptors.forEach(i=>{const dx=i.tx-i.x,dy=i.ty-i.y,d=Math.hypot(dx,dy);i.trail.push([i.x,i.y]);if(i.trail.length>14)i.trail.shift();if(d<i.speed*dt){i.dead=true;blast(i.tx,i.ty,74,true)}else{i.x+=dx/d*i.speed*dt;i.y+=dy/d*i.speed*dt}});
- missiles.forEach(m=>{m.age+=dt;const t=Math.min(1,m.age/m.duration),u=1-t,controlX=(m.startX+m.tx)/2,controlY=Math.min(m.startY,m.ty)-H*missileArc;m.trail.push([m.x,m.y]);if(m.trail.length>24)m.trail.shift();m.x=u*u*m.startX+2*u*t*controlX+t*t*m.tx;m.y=u*u*m.startY+2*u*t*controlY+t*t*m.ty;if(t>=1){m.dead=true;hitTarget(m)}});
- blasts.forEach(b=>{b.age+=dt;const p=b.age/b.life;b.r=Math.sin(Math.min(1,p)*Math.PI)*b.max;if(b.age>b.life)b.dead=true;if(b.friendly)missiles.forEach(m=>{if(!m.dead&&Math.hypot(m.x-b.x,m.y-b.y)<b.r){m.dead=true;blast(m.x,m.y,44,true)}})});
+ missiles.forEach(m=>{m.tx=sx(m.target.object.x);m.ty=sy(m.target.object.y);m.age+=dt;const t=Math.min(1,m.age/m.duration),u=1-t,controlX=(m.startX+m.tx)/2,controlY=Math.min(m.startY,m.ty)-H*MISSILE_ARC;m.trail.push([m.x,m.y]);if(m.trail.length>24)m.trail.shift();m.x=u*u*m.startX+2*u*t*controlX+t*t*m.tx;m.y=u*u*m.startY+2*u*t*controlY+t*t*m.ty;if(t>=1){m.dead=true;hitTarget(m)}});
+ drones.forEach(d=>{d.tx=sx(d.target.object.x);d.ty=sy(d.target.object.y);d.age+=dt;const t=Math.min(1,d.age/d.duration);d.trail.push([d.x,d.y]);if(d.trail.length>18)d.trail.shift();d.x=d.startX+(d.tx-d.startX)*t;d.y=d.startY+(d.ty-d.startY)*t;if(t>=1){d.dead=true;hitTarget(d)}});
+ blasts.forEach(b=>{b.age+=dt;const p=b.age/b.life;b.r=Math.sin(Math.min(1,p)*Math.PI)*b.max;if(b.age>b.life)b.dead=true;if(b.friendly){[...missiles,...drones].forEach(m=>{if(!m.dead&&Math.hypot(m.x-b.x,m.y-b.y)<b.r){m.dead=true;blast(m.x,m.y,44,true)}});enemySites.forEach(site=>{if(site.hp>0&&Math.hypot(sx(site.x)-b.x,sy(site.y)-b.y)<b.r){site.hp--;blast(sx(site.x),sy(site.y),38,true)}})}});
  sparks.forEach(s=>{s.age+=dt;s.x+=s.vx*dt;s.y+=s.vy*dt;s.vy+=90*dt;if(s.age>s.life)s.dead=true});
- missiles=missiles.filter(x=>!x.dead);interceptors=interceptors.filter(x=>!x.dead);blasts=blasts.filter(x=>!x.dead);sparks=sparks.filter(x=>!x.dead);
+ missiles=missiles.filter(x=>!x.dead);drones=drones.filter(x=>!x.dead);interceptors=interceptors.filter(x=>!x.dead);blasts=blasts.filter(x=>!x.dead);sparks=sparks.filter(x=>!x.dead);
  if(ships.length&&ships.every(s=>s.done||s.hp<=0))finish();
 }
 function finish(){
- state="result";missiles=[];interceptors=[];const {saved,lost}=outcomes();
+ state="result";missiles=[];drones=[];interceptors=[];const {saved,lost}=outcomes();
  ui.resultTitle.textContent=lost===0?"STRAIT HELD":saved?"CONVOY DAMAGED":"CONVOY LOST";
- ui.resultCopy.textContent=saved+" of 4 vessels cleared · "+lost+" lost · Closing gas price $"+gas.toFixed(2);
+ ui.resultCopy.textContent=saved+" of 6 vessels cleared · "+lost+" lost · Closing gas price $"+gas.toFixed(2);
  ui.result.classList.remove("hidden");ui.status.textContent="COMPLETE";ui.ticker.textContent="DAY 1 COMPLETE — "+saved+" TRANSITS — "+lost+" LOSSES — CLOSING GAS PRICE $"+gas.toFixed(2)+" —";
 }
 function polygonPath(points){ctx.beginPath();points.forEach((p,i)=>(i?ctx.lineTo(...p):ctx.moveTo(...p)));ctx.closePath()}
@@ -115,13 +126,24 @@ function drawShip(s){if(s.hp<=0){ctx.fillStyle="#6f351f";ctx.fillRect(sx(s.x)-14
 function drawBattery(){const x=sx(battery.x),y=sy(battery.y);ctx.strokeStyle="#d8c849";ctx.lineWidth=2;ctx.strokeRect(x-18,y-6,36,12);ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(x,y-7);ctx.lineTo(x+14,y-25);ctx.stroke()}
 function drawTargetZones(){
  ctx.save();ctx.strokeStyle="#ff9b4daa";ctx.lineWidth=1;ctx.setLineDash([3,3]);
- const active=new Set(missiles.map(m=>m.zone));
- active.forEach(zone=>{const p=targetPoint(zone),x=sx(p.x),y=sy(p.y);ctx.beginPath();ctx.arc(x,y,7,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.moveTo(x-10,y);ctx.lineTo(x+10,y);ctx.moveTo(x,y-10);ctx.lineTo(x,y+10);ctx.stroke()});
+ new Set([...missiles,...drones].map(t=>t.target.object)).forEach(object=>{const x=sx(object.x),y=sy(object.y);ctx.beginPath();ctx.arc(x,y,7,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.moveTo(x-10,y);ctx.lineTo(x+10,y);ctx.moveTo(x,y-10);ctx.lineTo(x,y+10);ctx.stroke()});
  ctx.restore();
 }
+function drawEnemySite(site){
+ const x=sx(site.x),y=sy(site.y);ctx.save();ctx.translate(x,y);ctx.strokeStyle=site.hp?"#f06d3d":"#69331f";ctx.fillStyle=site.hp?"#351812":"#1b110e";ctx.lineWidth=1.4;
+ if(site.type==="missile"){ctx.fillRect(-10,-7,20,14);ctx.strokeRect(-10,-7,20,14);ctx.beginPath();ctx.moveTo(-4,-8);ctx.lineTo(5,-22);ctx.moveTo(2,-8);ctx.lineTo(11,-22);ctx.stroke()}
+ else{ctx.beginPath();ctx.arc(0,0,8,0,7);ctx.fill();ctx.stroke();ctx.beginPath();ctx.moveTo(-12,0);ctx.lineTo(12,0);ctx.moveTo(0,-12);ctx.lineTo(0,12);ctx.stroke()}
+ ctx.restore();
+}
+function drawThreatShape(t,type){
+ const prev=t.trail.at(-2)||[t.startX,t.startY],angle=Math.atan2(t.y-prev[1],t.x-prev[0]);ctx.save();ctx.translate(t.x,t.y);ctx.rotate(angle);ctx.fillStyle=type==="missile"?"#ffb04d":"#ff8a55";ctx.strokeStyle="#ffd79a";ctx.lineWidth=1;
+ ctx.beginPath();if(type==="missile"){ctx.moveTo(8,0);ctx.lineTo(-4,-3);ctx.lineTo(-8,-6);ctx.lineTo(-7,0);ctx.lineTo(-8,6);ctx.lineTo(-4,3)}
+ else{ctx.moveTo(8,0);ctx.lineTo(-4,-3);ctx.lineTo(-10,-1);ctx.lineTo(-3,2);ctx.lineTo(-7,6);ctx.lineTo(1,3)}ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();
+}
 function drawObjects(){
- drawTargetZones();drawInfrastructure(refinery);drawInfrastructure(terminal);ships.forEach(drawShip);drawBattery();
- missiles.forEach(m=>{ctx.strokeStyle="#ff7138bb";ctx.lineWidth=2;ctx.beginPath();m.trail.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));ctx.stroke();ctx.fillStyle="#ffb04d";ctx.beginPath();ctx.arc(m.x,m.y,3,0,7);ctx.fill()});
+ drawTargetZones();drawInfrastructure(refinery);drawInfrastructure(terminal);ships.forEach(drawShip);enemySites.forEach(drawEnemySite);drawBattery();
+ missiles.forEach(m=>{ctx.strokeStyle="#ff7138bb";ctx.lineWidth=2;ctx.beginPath();m.trail.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));ctx.stroke();drawThreatShape(m,"missile")});
+ drones.forEach(d=>{ctx.strokeStyle="#ff8a55aa";ctx.lineWidth=1.5;ctx.beginPath();d.trail.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));ctx.stroke();drawThreatShape(d,"drone")});
  interceptors.forEach(i=>{ctx.strokeStyle="#b8fff0cc";ctx.lineWidth=2;ctx.beginPath();i.trail.forEach((p,n)=>n?ctx.lineTo(...p):ctx.moveTo(...p));ctx.stroke();ctx.fillStyle="#fff";ctx.fillRect(i.x-2,i.y-2,4,4)});
  blasts.forEach(b=>{const a=1-b.age/b.life;ctx.strokeStyle=(b.friendly?"rgba(185,255,224,":"rgba(255,113,56,")+a+")";ctx.lineWidth=2;ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,7);ctx.stroke()});sparks.forEach(s=>{ctx.fillStyle="#ffe164";ctx.fillRect(s.x,s.y,2,2)});
 }
@@ -130,7 +152,3 @@ function loop(t){const dt=Math.min(.033,(t-last)/1000||0);last=t;update(dt);rend
 canvas.addEventListener("pointerdown",e=>{const r=canvas.getBoundingClientRect();launch(e.clientX-r.left,e.clientY-r.top)});
 document.getElementById("start").onclick=reset;ui.intro.addEventListener("click",e=>{if(e.target!==document.getElementById("start"))reset()});document.getElementById("restart").onclick=reset;
 addEventListener("keydown",e=>{if(e.key==="Escape"&&state==="playing"){paused=!paused;ui.status.textContent=paused?"PAUSED":"READY"}});
-
-const arcSlider=document.getElementById("missile-arc");
-const arcValue=document.getElementById("missile-arc-value");
-arcSlider.addEventListener("input",()=>{missileArc=Number(arcSlider.value);arcValue.textContent=missileArc.toFixed(2)});
