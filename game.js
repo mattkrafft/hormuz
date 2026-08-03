@@ -3,7 +3,29 @@ const canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
 const ui={gas:document.getElementById("gas-price"),change:document.getElementById("gas-change"),ammo:document.getElementById("ammo"),status:document.getElementById("status"),intro:document.getElementById("intro"),result:document.getElementById("result"),resultTitle:document.getElementById("result-title"),resultCopy:document.getElementById("result-copy"),ticker:document.getElementById("ticker-text"),transits:document.getElementById("transits"),losses:document.getElementById("losses")};
 let W=0,H=0,dpr=1,state="intro",last=0,elapsed=0,spawnClock=0,spawned=0,ammo=18,gas=3.47,startGas=3.47,paused=false;
 let missiles=[],interceptors=[],blasts=[],ships=[],sparks=[];
-const TOTAL_MISSILES=16,battery={x:.63,y:.70},refinery={x:.62,y:.72,hp:2},terminal={x:.26,y:.78,hp:2};
+const TOTAL_MISSILES=16;
+
+const MAP={
+ north:[[.276,0],[.283,.007],[.273,.023],[.286,.028],[.285,.035],[.275,.04],[.285,.044],[.28,.063],[.284,.082],[.28,.096],[.292,.112],[.323,.114],[.333,.131],[.357,.152],[.348,.156],[.359,.166],[.362,.175],[.404,.203],[.401,.214],[.417,.224],[.436,.221],[.451,.233],[.465,.235],[.474,.24],[.505,.266],[.557,.247],[.572,.256],[.583,.256],[.59,.249],[.598,.238],[.628,.233],[.63,.235],[.645,.233],[.661,.226],[.682,.228],[.721,.242],[.738,.27],[.738,.303],[.733,.315],[.74,.34],[.745,.35],[.738,.364],[.743,.375],[.745,.394],[.786,.415],[.779,.429],[.793,.436],[.801,.424],[.811,.427],[.818,.443],[.827,.45],[.855,.45],[.878,.459],[.906,.473],[.932,.501],[.951,.494],[.961,.501],[.978,.497],[.99,.825],[1,.513]],
+ south:[[.109,0],[.086,.009],[.104,.014],[.095,.04],[.098,.075],[.092,.065],[.089,.07],[.09,.079],[.081,.086],[.089,.096],[.086,.11],[.074,.114],[.072,.124],[.085,.128],[.099,.138],[.083,.145],[.085,.166],[.099,.168],[.113,.193],[.117,.212],[.103,.21],[.1,.224],[.104,.235],[.073,.259],[.073,.245],[.059,.259],[.056,.291],[.055,.324],[.036,.35],[.029,.387],[.056,.352],[.105,.303],[.152,.273],[.182,.27],[.178,.287],[.191,.294],[.176,.317],[.154,.329],[.142,.35],[.15,.352],[.121,.387],[.082,.415],[.039,.45],[.057,.452],[.076,.448],[.073,.464],[.085,.459],[.065,.497],[.079,.501],[.098,.513],[.152,.494],[.169,.515],[.194,.517],[.23,.555],[.279,.552],[.283,.534],[.293,.552],[.337,.527],[.366,.497],[.493,.429],[.569,.401],[.615,.354],[.637,.825],[.655,.359],[.618,.42],[.605,.422],[.6,.441],[.611,.448],[.583,.522],[.577,.618],[.576,.711],[.594,.783],[.626,.825]],
+ qeshm:[[.557,.27],[.589,.275],[.605,.27],[.622,.268],[.626,.275],[.652,.263],[.659,.254],[.671,.252],[.66,.242],[.629,.247],[.615,.24],[.617,.256],[.587,.261]],
+ hormuz:[[.688,.245],[.691,.249],[.697,.245],[.694,.24]],
+ larak:[[.671,.27],[.684,.268],[.677,.259]],
+ eastbound:[[.164,0],[.193,.154],[.353,.324],[.551,.345],[.645,.326],[.669,.371],[.66,.438],[.69,.594],[.767,.664],[1,.788]],
+ westbound:[[1,.587],[.771,.503],[.723,.413],[.707,.305],[.659,.284],[.478,.287],[.346,.219],[.27,.142],[.25,0]]
+};
+function routeSample(points,t){
+ const lengths=[];let total=0;
+ for(let i=1;i<points.length;i++){const dx=points[i][0]-points[i-1][0],dy=points[i][1]-points[i-1][1];total+=Math.hypot(dx,dy);lengths.push(total)}
+ const target=t*total;
+ if(target<=0){const a=points[0],b=points[1],d=lengths[0]||1;return{x:a[0]+(b[0]-a[0])*target/d,y:a[1]+(b[1]-a[1])*target/d,angle:Math.atan2((b[1]-a[1])*H,(b[0]-a[0])*W)}}
+ if(target>=total){const a=points.at(-2),b=points.at(-1),d=total-(lengths.at(-2)||0)||1,over=target-total;return{x:b[0]+(b[0]-a[0])*over/d,y:b[1]+(b[1]-a[1])*over/d,angle:Math.atan2((b[1]-a[1])*H,(b[0]-a[0])*W)}}
+ let i=0;while(lengths[i]<target)i++;const prev=i?lengths[i-1]:0,a=points[i],b=points[i+1],u=(target-prev)/(lengths[i]-prev);
+ return{x:a[0]+(b[0]-a[0])*u,y:a[1]+(b[1]-a[1])*u,angle:Math.atan2((b[1]-a[1])*H,(b[0]-a[0])*W)}
+}
+function placeShip(s){const p=routeSample(MAP.eastbound,s.progress);s.x=p.x;s.y=p.y;s.angle=p.angle}
+
+const battery={x:.63,y:.70},refinery={x:.62,y:.72,hp:2},terminal={x:.26,y:.78,hp:2};
 
 function resize(){const r=canvas.getBoundingClientRect();dpr=Math.min(devicePixelRatio||1,2);W=r.width;H=r.height;canvas.width=W*dpr;canvas.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
 addEventListener("resize",resize);resize();
@@ -11,11 +33,11 @@ function sx(v){return v*W} function sy(v){return v*H}
 function reset(){
  state="playing";elapsed=spawnClock=0;spawned=0;ammo=18;gas=startGas;missiles=[];interceptors=[];blasts=[];sparks=[];refinery.hp=2;terminal.hp=2;
  ships=[
-  {x:-.07,y:.53,lane:-.006,speed:.034,hp:1,name:"TANKER 01",done:false},
-  {x:-.27,y:.54,lane:.006,speed:.032,hp:1,name:"CARRIER 02",done:false},
-  {x:-.47,y:.53,lane:-.003,speed:.030,hp:1,name:"TANKER 03",done:false},
-  {x:-.67,y:.54,lane:.003,speed:.028,hp:1,name:"FREIGHTER 04",done:false}
- ];
+  {progress:-.04,speed:.040,hp:1,name:"TANKER 01",done:false},
+  {progress:-.20,speed:.038,hp:1,name:"CARRIER 02",done:false},
+  {progress:-.36,speed:.036,hp:1,name:"TANKER 03",done:false},
+  {progress:-.52,speed:.034,hp:1,name:"FREIGHTER 04",done:false}
+ ];ships.forEach(placeShip);
  ui.intro.classList.add("hidden");ui.result.classList.add("hidden");ui.status.textContent="READY";ui.ticker.textContent="DAY 1 ACTIVE — FOUR VESSELS ENTERING THE STRAIT — PROTECT ALL SHIPPING —";updateHud();
 }
 function outcomes(){return{saved:ships.filter(s=>s.done).length,lost:ships.filter(s=>s.hp<=0).length}}
@@ -31,7 +53,7 @@ function hitTarget(m){if(m.target.hp<=0||m.target.done)return;m.target.hp--;blas
 function update(dt){
  if(state!=="playing"||paused)return;elapsed+=dt;spawnClock+=dt;
  if(spawned<TOTAL_MISSILES&&spawnClock>Math.max(.58,1.35-elapsed*.012)){spawnClock=0;spawnMissile()}
- ships.forEach(s=>{if(s.hp>0&&!s.done){s.x+=s.speed*dt;const p=Math.max(0,Math.min(1,(s.x+.07)/1.14));s.y=.535-.085*Math.sin(p*Math.PI)-.010*p+s.lane;if(s.x>1.07){s.done=true;gas=Math.max(1.5,gas-.14);updateHud()}}});
+ ships.forEach(s=>{if(s.hp>0&&!s.done){s.progress+=s.speed*dt;placeShip(s);if(s.progress>1.04){s.done=true;gas=Math.max(1.5,gas-.14);updateHud()}}});
  interceptors.forEach(i=>{const dx=i.tx-i.x,dy=i.ty-i.y,d=Math.hypot(dx,dy);i.trail.push([i.x,i.y]);if(i.trail.length>14)i.trail.shift();if(d<i.speed*dt){i.dead=true;blast(i.tx,i.ty,74,true)}else{i.x+=dx/d*i.speed*dt;i.y+=dy/d*i.speed*dt}});
  missiles.forEach(m=>{if(m.target.done||m.target.hp<=0){m.dead=true;return}const dx=m.tx-m.x,dy=m.ty-m.y,d=Math.hypot(dx,dy);m.trail.push([m.x,m.y]);if(m.trail.length>24)m.trail.shift();if(d<m.speed*dt){m.dead=true;hitTarget(m)}else{m.x+=dx/d*m.speed*dt;m.y+=dy/d*m.speed*dt}});
  blasts.forEach(b=>{b.age+=dt;const p=b.age/b.life;b.r=Math.sin(Math.min(1,p)*Math.PI)*b.max;if(b.age>b.life)b.dead=true;if(b.friendly)missiles.forEach(m=>{if(!m.dead&&Math.hypot(m.x-b.x,m.y-b.y)<b.r){m.dead=true;blast(m.x,m.y,44,true)}})});
@@ -51,18 +73,17 @@ function drawSea(){
  ctx.save();ctx.strokeStyle="#91d84b18";ctx.lineWidth=1;for(let y=H*.13;y<H;y+=20){ctx.beginPath();for(let x=-40;x<=W+40;x+=30)ctx.lineTo(x,y+Math.sin(x*.021+y*.012)*2);ctx.stroke()}ctx.restore();
 }
 function coast(points){ctx.strokeStyle="#a8d93c";ctx.lineWidth=1.5;ctx.shadowColor="#72c83c";ctx.shadowBlur=5;ctx.beginPath();points.forEach((p,i)=>(i?ctx.lineTo(p[0]*W,p[1]*H):ctx.moveTo(p[0]*W,p[1]*H)));ctx.stroke();ctx.shadowBlur=0}
+function pixels(points){return points.map(([x,y])=>[sx(x),sy(y)])}
 function drawLand(){
- const north=[[0,0],[1,0],[1,.24],[.96,.25],[.92,.29],[.87,.30],[.83,.34],[.78,.35],[.74,.33],[.70,.35],[.66,.33],[.61,.36],[.56,.34],[.52,.38],[.47,.37],[.43,.40],[.38,.39],[.33,.43],[.28,.41],[.23,.44],[.18,.43],[.13,.47],[.08,.45],[.04,.49],[0,.48]];
- const south=[[0,.74],[.06,.72],[.12,.69],[.18,.67],[.24,.63],[.30,.61],[.36,.57],[.42,.55],[.48,.51],[.53,.48],[.57,.50],[.59,.56],[.58,.62],[.61,.67],[.67,.70],[.73,.72],[.80,.75],[.88,.78],[.95,.79],[1,.81],[1,1],[0,1]];
- poly(north,"#172d15");poly(south,"#183016");coast(north.slice(2));coast(south.slice(0,20));
+ const northLand=[[0,0],...MAP.north,[1,0]],southLand=[...MAP.south,[1,1],[0,1],[0,0]];
+ poly(pixels(northLand),"#172d15");poly(pixels(southLand),"#183016");coast(MAP.north);coast(MAP.south);
  ctx.strokeStyle="#68a73922";ctx.lineWidth=.7;for(let i=0;i<34;i++){ctx.beginPath();ctx.moveTo((i*.079%1)*W,0);ctx.lineTo(((i*.079+.12)%1)*W,H*.39);ctx.stroke();ctx.beginPath();ctx.moveTo((i*.091%1)*W,H);ctx.lineTo(((i*.091+.07)%1)*W,H*.66);ctx.stroke()}
- poly([[W*.455,H*.395],[W*.480,H*.375],[W*.515,H*.382],[W*.505,H*.405],[W*.468,H*.410]],"#1c3518","#95cc3d");
- poly([[W*.625,H*.365],[W*.642,H*.350],[W*.660,H*.358],[W*.654,H*.380],[W*.633,H*.383]],"#1c3518","#95cc3d");
- poly([[W*.765,H*.342],[W*.774,H*.336],[W*.781,H*.347],[W*.772,H*.355]],"#1c3518","#95cc3d");
+ [MAP.qeshm,MAP.hormuz,MAP.larak].forEach(island=>poly(pixels(island),"#1c3518","#95cc3d"));
 }
-function drawLane(){ctx.save();ctx.strokeStyle="#8fe54899";ctx.lineWidth=1.5;ctx.setLineDash([8,10]);ctx.beginPath();ctx.moveTo(-20,H*.535);ctx.bezierCurveTo(W*.30,H*.535,W*.52,H*.405,W+20,H*.525);ctx.stroke();ctx.restore()}
+function traceRoute(points){ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(sx(x),sy(y)):ctx.moveTo(sx(x),sy(y)));ctx.stroke()}
+function drawLane(){ctx.save();ctx.lineWidth=1.25;ctx.setLineDash([6,8]);ctx.strokeStyle="#8fe548aa";traceRoute(MAP.eastbound);ctx.strokeStyle="#74bd4290";traceRoute(MAP.westbound);ctx.restore()}
 function drawInfrastructure(o,label){const x=sx(o.x),y=sy(o.y);ctx.save();ctx.translate(x,y);ctx.strokeStyle=o.hp?"#d8c849":"#863b24";ctx.lineWidth=1.5;ctx.strokeRect(-20,-10,40,13);ctx.beginPath();ctx.arc(-10,-11,6,Math.PI,0);ctx.arc(9,-11,6,Math.PI,0);ctx.stroke();ctx.fillStyle="#d8c849";ctx.font="10px Share Tech Mono";ctx.fillText(label,-31,19);ctx.restore()}
-function drawShip(s){if(s.hp<=0){ctx.fillStyle="#6f351f";ctx.fillRect(sx(s.x)-14,sy(s.y),29,2);return}if(s.done)return;const x=sx(s.x),y=sy(s.y);ctx.save();ctx.translate(x,y);ctx.scale(.78,.78);poly([[-28,-4],[26,-4],[19,6],[-22,6]],"#18331b","#b7e34b");ctx.fillStyle="#9fd947";ctx.fillRect(-8,-13,20,8);ctx.fillRect(-20,-9,9,4);ctx.fillRect(14,-9,7,4);ctx.fillRect(1,-20,3,7);ctx.restore()}
+function drawShip(s){if(s.hp<=0){ctx.fillStyle="#6f351f";ctx.fillRect(sx(s.x)-14,sy(s.y),29,2);return}if(s.done)return;const x=sx(s.x),y=sy(s.y);ctx.save();ctx.translate(x,y);ctx.rotate(s.angle||0);ctx.scale(.78,.78);poly([[-28,-4],[26,-4],[19,6],[-22,6]],"#18331b","#b7e34b");ctx.fillStyle="#9fd947";ctx.fillRect(-8,-13,20,8);ctx.fillRect(-20,-9,9,4);ctx.fillRect(14,-9,7,4);ctx.fillRect(1,-20,3,7);ctx.restore()}
 function drawBattery(){const x=sx(battery.x),y=sy(battery.y);ctx.strokeStyle="#d8c849";ctx.lineWidth=2;ctx.strokeRect(x-18,y-6,36,12);ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(x,y-7);ctx.lineTo(x+14,y-25);ctx.stroke()}
 function drawObjects(){
  drawInfrastructure(refinery,"AL MINHAD");drawInfrastructure(terminal,"AL DHAFRA");ships.forEach(drawShip);drawBattery();
