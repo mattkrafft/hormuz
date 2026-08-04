@@ -75,7 +75,7 @@ function startDay(){
  ui.intro.classList.add("hidden");ui.result.classList.add("hidden");ui.status.textContent="READY";ui.ticker.textContent="DAY "+day+" ACTIVE — SIX VESSELS TRANSITING BOTH DIRECTIONS — KEEP U.S. GAS BELOW $5.00 —";updateHud();
 }
 function outcomes(){return{saved:ships.filter(s=>s.done).length,lost:ships.filter(s=>s.hp<=0).length}}
-function updateHud(){const o=outcomes();ui.gas.textContent="$"+gas.toFixed(2);const d=gas-startGas;ui.change.textContent=(d>=0?"▲ +":"▼ -")+Math.abs(d).toFixed(2);ui.change.style.color=d>0?"#ff7138":"#9ee75b";ui.day.textContent=String(day).padStart(2,"0");ui.transits.textContent=String(campaignTransits+o.saved).padStart(2,"0");ui.losses.textContent=String(campaignLosses+o.lost).padStart(2,"0")}
+function updateHud(){const o=outcomes();ui.gas.textContent="$"+gas.toFixed(2);const d=gas-startGas;ui.change.textContent=(d>=0?"▲ +":"▼ -")+Math.abs(d).toFixed(2);ui.change.style.color=d>0?"#ff7138":"#9ee75b";ui.day.textContent=String(day).padStart(2,"0");const liveSaved=state==="playing"?o.saved:0,liveLost=state==="playing"?o.lost:0;ui.transits.textContent=String(campaignTransits+liveSaved).padStart(2,"0");ui.losses.textContent=String(campaignLosses+liveLost).padStart(2,"0")}
 function selectOrResupplyBase(x,y){
  const base=defenseBases.find(b=>Math.hypot(sx(b.x)-x,sy(b.y)-y)<26);
  if(!base)return false;
