@@ -177,9 +177,19 @@ function drawEnemySite(site){
  ctx.restore();
 }
 function drawThreatShape(t,type){
- const prev=t.trail.at(-2)||[t.startX,t.startY],angle=Math.atan2(t.y-prev[1],t.x-prev[0]);ctx.save();ctx.translate(t.x,t.y);ctx.rotate(angle);ctx.fillStyle=type==="missile"?"#ffb04d":"#ff8a55";ctx.strokeStyle="#ffd79a";ctx.lineWidth=1;
- ctx.beginPath();if(type==="missile"){ctx.moveTo(8,0);ctx.lineTo(-4,-3);ctx.lineTo(-8,-6);ctx.lineTo(-7,0);ctx.lineTo(-8,6);ctx.lineTo(-4,3)}
- else{ctx.moveTo(8,0);ctx.lineTo(-4,-3);ctx.lineTo(-10,-1);ctx.lineTo(-3,2);ctx.lineTo(-7,6);ctx.lineTo(1,3)}ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();
+ const prev=t.trail.at(-2)||[t.startX,t.startY],angle=Math.atan2(t.y-prev[1],t.x-prev[0]);ctx.save();ctx.translate(t.x,t.y);ctx.rotate(angle);ctx.lineWidth=1;
+ if(type==="missile"){
+  // Long ballistic silhouette: pointed nose, cylindrical body, rear fins,
+  // engine bell, and a hot exhaust plume keep it distinct from the drones.
+  ctx.fillStyle="#ffb04d";ctx.strokeStyle="#ffe0a8";
+  ctx.beginPath();ctx.moveTo(14,0);ctx.lineTo(8,-3.2);ctx.lineTo(-8,-3.2);ctx.lineTo(-13,-7);ctx.lineTo(-12,-2.7);ctx.lineTo(-16,-1.8);ctx.lineTo(-16,1.8);ctx.lineTo(-12,2.7);ctx.lineTo(-13,7);ctx.lineTo(-8,3.2);ctx.lineTo(8,3.2);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.strokeStyle="#9d3e24";ctx.beginPath();ctx.moveTo(7,-3);ctx.lineTo(7,3);ctx.moveTo(-9,-3);ctx.lineTo(-9,3);ctx.stroke();
+  ctx.fillStyle="#ff5c32";ctx.beginPath();ctx.moveTo(-16,-1.8);ctx.lineTo(-23,0);ctx.lineTo(-16,1.8);ctx.closePath();ctx.fill();
+  ctx.fillStyle="#ffe164";ctx.beginPath();ctx.moveTo(-16,-.8);ctx.lineTo(-20,0);ctx.lineTo(-16,.8);ctx.closePath();ctx.fill();
+ }else{
+  ctx.fillStyle="#ff8a55";ctx.strokeStyle="#ffd79a";ctx.beginPath();ctx.moveTo(8,0);ctx.lineTo(-4,-3);ctx.lineTo(-10,-1);ctx.lineTo(-3,2);ctx.lineTo(-7,6);ctx.lineTo(1,3);ctx.closePath();ctx.fill();ctx.stroke();
+ }
+ ctx.restore();
 }
 function drawObjects(){
  drawTargetZones();drawInfrastructure(refinery);drawInfrastructure(terminal);ships.forEach(drawShip);enemySites.forEach(drawEnemySite);defenseBases.forEach(drawDefenseBase);
