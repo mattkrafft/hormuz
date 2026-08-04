@@ -1,7 +1,7 @@
 "use strict";
 const canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
-const ui={gas:document.getElementById("gas-price"),change:document.getElementById("gas-change"),ammo:document.getElementById("ammo"),status:document.getElementById("status"),intro:document.getElementById("intro"),result:document.getElementById("result"),resultTitle:document.getElementById("result-title"),resultCopy:document.getElementById("result-copy"),ticker:document.getElementById("ticker-text"),transits:document.getElementById("transits"),losses:document.getElementById("losses")};
-let W=0,H=0,dpr=1,state="intro",last=0,elapsed=0,spawnClock=0,spawned=0,ammo=6,gas=3.47,startGas=3.47,paused=false;
+const ui={gas:document.getElementById("gas-price"),change:document.getElementById("gas-change"),day:document.getElementById("day"),status:document.getElementById("status"),intro:document.getElementById("intro"),result:document.getElementById("result"),resultTitle:document.getElementById("result-title"),resultCopy:document.getElementById("result-copy"),ticker:document.getElementById("ticker-text"),transits:document.getElementById("transits"),losses:document.getElementById("losses")};
+let W=0,H=0,dpr=1,state="intro",last=0,elapsed=0,spawnClock=0,spawned=0,day=1,gas=3.47,startGas=3.47,paused=false,campaignTransits=0,campaignLosses=0;
 const MISSILE_ARC=.22;
 let missiles=[],drones=[],interceptors=[],blasts=[],ships=[],sparks=[];
 const TOTAL_MISSILES=16,TOTAL_DRONES=10;
@@ -61,8 +61,9 @@ function attackTarget(kind){
 function resize(){const r=canvas.getBoundingClientRect();dpr=Math.min(devicePixelRatio||1,2);W=r.width;H=r.height;canvas.width=W*dpr;canvas.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
 addEventListener("resize",resize);resize();
 function sx(v){return v*W} function sy(v){return v*H}
-function reset(){
- state="playing";elapsed=spawnClock=0;spawned=0;gas=startGas;missiles=[];drones=[];interceptors=[];blasts=[];sparks=[];refinery.hp=2;terminal.hp=2;defenseBases.forEach(b=>{b.ammo=b.maxAmmo;b.resupplyUntil=0});activeBase=defenseBases[1];ammo=activeBase.ammo;enemySites.forEach(s=>{s.hp=s.type==="missile"?2:1;s.active=false;s.respawnAt=0});
+function resetCampaign(){day=1;gas=startGas;campaignTransits=0;campaignLosses=0;startDay()}
+function startDay(){
+ state="playing";elapsed=spawnClock=0;spawned=0;missiles=[];drones=[];interceptors=[];blasts=[];sparks=[];refinery.hp=2;terminal.hp=2;defenseBases.forEach(b=>{b.ammo=b.maxAmmo;b.resupplyUntil=0});activeBase=defenseBases[1];enemySites.forEach(s=>{s.hp=s.type==="missile"?2:1;s.active=false;s.respawnAt=0});
  ships=[
   {progress:-.04,speed:.040,hp:1,name:"TANKER 01",done:false,route:MAP.eastbound},
   {progress:-.20,speed:.038,hp:1,name:"CARRIER 02",done:false,route:MAP.eastbound},
@@ -71,10 +72,10 @@ function reset(){
   {progress:-.06,speed:.039,hp:1,name:"TANKER 05",done:false,route:MAP.westbound},
   {progress:-.30,speed:.035,hp:1,name:"FREIGHTER 06",done:false,route:MAP.westbound}
  ];ships.forEach(placeShip);
- ui.intro.classList.add("hidden");ui.result.classList.add("hidden");ui.status.textContent="READY";ui.ticker.textContent="DAY 1 ACTIVE — SIX VESSELS TRANSITING BOTH DIRECTIONS — DESTROY HOSTILE LAUNCH SITES —";updateHud();
+ ui.intro.classList.add("hidden");ui.result.classList.add("hidden");ui.status.textContent="READY";ui.ticker.textContent="DAY "+day+" ACTIVE — SIX VESSELS TRANSITING BOTH DIRECTIONS — KEEP U.S. GAS BELOW $5.00 —";updateHud();
 }
 function outcomes(){return{saved:ships.filter(s=>s.done).length,lost:ships.filter(s=>s.hp<=0).length}}
-function updateHud(){const o=outcomes();ammo=activeBase.ammo;ui.gas.textContent="$"+gas.toFixed(2);const d=gas-startGas;ui.change.textContent=(d>=0?"▲ +":"▼ -")+Math.abs(d).toFixed(2);ui.change.style.color=d>0?"#ff7138":"#9ee75b";ui.ammo.textContent=String(ammo).padStart(2,"0");ui.transits.textContent=String(o.saved).padStart(2,"0");ui.losses.textContent=String(o.lost).padStart(2,"0")}
+function updateHud(){const o=outcomes();ui.gas.textContent="$"+gas.toFixed(2);const d=gas-startGas;ui.change.textContent=(d>=0?"▲ +":"▼ -")+Math.abs(d).toFixed(2);ui.change.style.color=d>0?"#ff7138":"#9ee75b";ui.day.textContent=String(day).padStart(2,"0");const liveSaved=state==="playing"?o.saved:0,liveLost=state==="playing"?o.lost:0;ui.transits.textContent=String(campaignTransits+liveSaved).padStart(2,"0");ui.losses.textContent=String(campaignLosses+liveLost).padStart(2,"0")}
 function selectOrResupplyBase(x,y){
  const base=defenseBases.find(b=>Math.hypot(sx(b.x)-x,sy(b.y)-y)<26);
  if(!base)return false;
@@ -106,7 +107,7 @@ function update(dt){
  if(state!=="playing"||paused)return;elapsed+=dt;spawnClock+=dt;
  defenseBases.forEach(b=>{if(b.resupplyUntil){const remaining=b.resupplyUntil-elapsed;if(remaining<=0){b.ammo=b.maxAmmo;b.resupplyUntil=0;ui.status.textContent=b===activeBase?b.name+" READY":"READY";updateHud()}else if(b===activeBase)ui.status.textContent="RESUPPLY "+remaining.toFixed(1)+"s"}});
  enemySites.forEach(site=>{if(site.respawnAt&&elapsed>=site.respawnAt){relocateSite(site);site.hp=site.type==="missile"?2:1;site.respawnAt=0;site.active=false}});
- if(spawned<TOTAL_MISSILES+TOTAL_DRONES&&spawnClock>Math.max(.58,1.28-elapsed*.011)){spawnClock=0;spawnThreat()}
+ const fireInterval=Math.max(.42,1.75-(day-1)*.16-elapsed*.006);if(spawned<TOTAL_MISSILES+TOTAL_DRONES&&spawnClock>fireInterval){spawnClock=0;spawnThreat()}
  ships.forEach(s=>{if(s.hp>0&&!s.done){s.progress+=s.speed*dt;placeShip(s);if(s.progress>1.04){s.done=true;gas=Math.max(1.5,gas-.14);updateHud()}}});
  interceptors.forEach(i=>{const dx=i.tx-i.x,dy=i.ty-i.y,d=Math.hypot(dx,dy);i.trail.push([i.x,i.y]);if(i.trail.length>14)i.trail.shift();if(d<i.speed*dt){i.dead=true;blast(i.tx,i.ty,74,true)}else{i.x+=dx/d*i.speed*dt;i.y+=dy/d*i.speed*dt}});
  missiles.forEach(m=>{m.tx=sx(m.target.object.x);m.ty=sy(m.target.object.y);m.age+=dt;const t=Math.min(1,m.age/m.duration),u=1-t,controlX=(m.startX+m.tx)/2,controlY=Math.min(m.startY,m.ty)-H*MISSILE_ARC;m.trail.push([m.x,m.y]);if(m.trail.length>24)m.trail.shift();m.x=u*u*m.startX+2*u*t*controlX+t*t*m.tx;m.y=u*u*m.startY+2*u*t*controlY+t*t*m.ty;if(t>=1){m.dead=true;hitTarget(m)}});
@@ -117,10 +118,13 @@ function update(dt){
  if(ships.length&&ships.every(s=>s.done||s.hp<=0))finish();
 }
 function finish(){
- state="result";missiles=[];drones=[];interceptors=[];const {saved,lost}=outcomes();
- ui.resultTitle.textContent=lost===0?"STRAIT HELD":saved?"CONVOY DAMAGED":"CONVOY LOST";
- ui.resultCopy.textContent=saved+" of 6 vessels cleared · "+lost+" lost · Closing gas price $"+gas.toFixed(2);
- ui.result.classList.remove("hidden");ui.status.textContent="COMPLETE";ui.ticker.textContent="DAY 1 COMPLETE — "+saved+" TRANSITS — "+lost+" LOSSES — CLOSING GAS PRICE $"+gas.toFixed(2)+" —";
+ state="result";missiles=[];drones=[];interceptors=[];const {saved,lost}=outcomes();campaignTransits+=saved;campaignLosses+=lost;updateHud();
+ const gameOver=gas>5;
+ ui.resultTitle.textContent=gameOver?"GAS PRICE CRISIS":lost===0?"DAY "+day+" HELD":"DAY "+day+" COMPLETE";
+ ui.resultCopy.textContent=gameOver?"U.S. gas closed at $"+gas.toFixed(2)+", above the $5.00 limit. Total passages: "+campaignTransits+" · Total losses: "+campaignLosses:saved+" vessels cleared today · "+lost+" lost today · Gas $"+gas.toFixed(2)+" · Campaign passages "+campaignTransits+" · losses "+campaignLosses;
+ ui.result.classList.remove("hidden");ui.status.textContent=gameOver?"GAME OVER":"DAY COMPLETE";
+ const button=document.getElementById("restart");button.textContent=gameOver?"RESTART CAMPAIGN":"CONTINUE TO DAY "+(day+1);button.dataset.action=gameOver?"restart":"next";
+ ui.ticker.textContent=gameOver?"GAME OVER — GAS CLOSED ABOVE $5.00 —":"DAY "+day+" COMPLETE — "+campaignTransits+" TOTAL PASSAGES — "+campaignLosses+" TOTAL LOSSES —";
 }
 function polygonPath(points){ctx.beginPath();points.forEach((p,i)=>(i?ctx.lineTo(...p):ctx.moveTo(...p)));ctx.closePath()}
 function poly(points,fill,stroke){polygonPath(points);ctx.fillStyle=fill;ctx.fill();if(stroke){ctx.strokeStyle=stroke;ctx.stroke()}}
@@ -146,11 +150,12 @@ function drawLand(){
 function traceRoute(points){ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(sx(x),sy(y)):ctx.moveTo(sx(x),sy(y)));ctx.stroke()}
 function drawLane(){ctx.save();ctx.lineWidth=1.25;ctx.setLineDash([6,8]);ctx.strokeStyle="#8fe548aa";traceRoute(MAP.eastbound);ctx.strokeStyle="#74bd4290";traceRoute(MAP.westbound);ctx.restore()}
 function drawInfrastructure(o){const x=sx(o.x),y=sy(o.y);ctx.save();ctx.translate(x,y);ctx.strokeStyle=o.hp?"#d8c849":"#863b24";ctx.lineWidth=1.5;ctx.strokeRect(-20,-10,40,13);ctx.beginPath();ctx.arc(-10,-11,6,Math.PI,0);ctx.arc(9,-11,6,Math.PI,0);ctx.stroke();ctx.restore()}
-function drawShip(s){if(s.hp<=0){ctx.fillStyle="#6f351f";ctx.fillRect(sx(s.x)-14,sy(s.y),29,2);return}if(s.done)return;const x=sx(s.x),y=sy(s.y);ctx.save();ctx.translate(x,y);ctx.rotate(s.angle||0);ctx.scale(.82,.82);
+function drawShip(s){if(s.hp<=0){ctx.fillStyle="#6f351f";ctx.fillRect(sx(s.x)-14,sy(s.y),29,2);return}if(s.done)return;const x=sx(s.x),y=sy(s.y);ctx.save();ctx.translate(x,y);
+ let displayAngle=s.angle||0,mirror=1;if(displayAngle>Math.PI/2||displayAngle<-Math.PI/2){displayAngle+=displayAngle>0?-Math.PI:Math.PI;mirror=-1}ctx.rotate(displayAngle);ctx.scale(.82*mirror,.82);
  poly([[-31,-5],[25,-5],[32,0],[24,6],[-27,6],[-33,2]],"#18331b","#b7e34b");
  ctx.fillStyle="#78b83e";ctx.fillRect(-21,-10,35,5);ctx.strokeStyle="#b7e34b";ctx.lineWidth=1;[-15,-5,5].forEach(cx=>{ctx.beginPath();ctx.ellipse(cx,-8,5,2.5,0,0,7);ctx.stroke()});
  ctx.fillStyle="#a9df54";ctx.fillRect(14,-14,10,9);ctx.fillRect(17,-20,4,6);ctx.restore()}
-function drawDefenseBase(base){const x=sx(base.x),y=sy(base.y);ctx.save();ctx.translate(x,y);ctx.strokeStyle=base===activeBase?"#fff27a":"#d8c849";ctx.fillStyle="#20351b";ctx.lineWidth=base===activeBase?2.5:1.5;ctx.strokeRect(-18,-7,36,14);ctx.fillRect(-16,-5,32,10);ctx.beginPath();ctx.moveTo(-8,-8);ctx.lineTo(8,-24);ctx.stroke();if(base.resupplyUntil){ctx.strokeStyle="#75e7ff";ctx.beginPath();ctx.arc(0,0,23,-Math.PI/2,-Math.PI/2+Math.PI*2*(1-(base.resupplyUntil-elapsed)/4));ctx.stroke()}ctx.restore()}
+function drawDefenseBase(base){const x=sx(base.x),y=sy(base.y);ctx.save();ctx.translate(x,y);ctx.strokeStyle=base===activeBase?"#fff27a":"#d8c849";ctx.fillStyle="#20351b";ctx.lineWidth=base===activeBase?2.5:1.5;ctx.strokeRect(-18,-7,36,14);ctx.fillRect(-16,-5,32,10);ctx.beginPath();ctx.moveTo(-8,-8);ctx.lineTo(8,-24);ctx.stroke();if(base.resupplyUntil){ctx.strokeStyle="#75e7ff";ctx.beginPath();ctx.arc(0,0,23,-Math.PI/2,-Math.PI/2+Math.PI*2*(1-(base.resupplyUntil-elapsed)/4));ctx.stroke()}ctx.fillStyle=base===activeBase?"#fff27a":"#d8c849";ctx.font="12px Share Tech Mono";ctx.textAlign="center";ctx.fillText(String(base.ammo).padStart(2,"0"),0,29);ctx.restore()}
 function drawTargetZones(){
  ctx.save();ctx.strokeStyle="#ff9b4daa";ctx.lineWidth=1;ctx.setLineDash([3,3]);
  new Set([...missiles,...drones].map(t=>t.target.object)).forEach(object=>{const x=sx(object.x),y=sy(object.y);ctx.beginPath();ctx.arc(x,y,7,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.moveTo(x-10,y);ctx.lineTo(x+10,y);ctx.moveTo(x,y-10);ctx.lineTo(x,y+10);ctx.stroke()});
@@ -178,5 +183,5 @@ function drawObjects(){
 function render(){drawSea();drawLand();drawLane();drawObjects();if(paused){ctx.fillStyle="#020b07dd";ctx.fillRect(0,0,W,H);ctx.fillStyle="#a9ea55";ctx.font="700 48px Barlow Condensed";ctx.textAlign="center";ctx.fillText("PAUSED",W/2,H/2);ctx.textAlign="left"}}
 function loop(t){const dt=Math.min(.033,(t-last)/1000||0);last=t;update(dt);render();requestAnimationFrame(loop)}requestAnimationFrame(loop);
 canvas.addEventListener("pointerdown",e=>{const r=canvas.getBoundingClientRect();launch(e.clientX-r.left,e.clientY-r.top)});
-document.getElementById("start").onclick=reset;ui.intro.addEventListener("click",e=>{if(e.target!==document.getElementById("start"))reset()});document.getElementById("restart").onclick=reset;
+document.getElementById("start").onclick=resetCampaign;ui.intro.addEventListener("click",e=>{if(e.target!==document.getElementById("start"))resetCampaign()});document.getElementById("restart").onclick=()=>{const b=document.getElementById("restart");if(b.dataset.action==="next"){day++;startDay()}else resetCampaign()};
 addEventListener("keydown",e=>{if(e.key==="Escape"&&state==="playing"){paused=!paused;ui.status.textContent=paused?"PAUSED":"READY"}});
