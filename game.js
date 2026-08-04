@@ -32,14 +32,24 @@ const defenseBases=[
  {x:.63,y:.70,ammo:6,maxAmmo:6,resupplyUntil:0,name:"EAST BASE"}
 ];
 let activeBase=defenseBases[1];
+const SITE_POSITIONS={
+ missile:[[.34,.06],[.43,.115],[.53,.13],[.61,.18],[.70,.14],[.84,.30],[.92,.40]],
+ drone:[[.36,.18],[.50,.285],[.62,.255],[.70,.255],[.77,.47],[.84,.50],[.91,.55]]
+};
 const missileSites=[
  {x:.43,y:.115,hp:2,type:"missile",active:false,respawnAt:0},{x:.61,y:.18,hp:2,type:"missile",active:false,respawnAt:0},{x:.84,y:.30,hp:2,type:"missile",active:false,respawnAt:0}
 ];
 const droneSites=[
- {x:.36,y:.205,hp:1,type:"drone",active:false,respawnAt:0},{x:.70,y:.255,hp:1,type:"drone",active:false,respawnAt:0},{x:.91,y:.49,hp:1,type:"drone",active:false,respawnAt:0}
+ {x:.36,y:.18,hp:1,type:"drone",active:false,respawnAt:0},{x:.70,y:.255,hp:1,type:"drone",active:false,respawnAt:0},{x:.91,y:.55,hp:1,type:"drone",active:false,respawnAt:0}
 ];
 const enemySites=[...missileSites,...droneSites];
 function choose(list){return list[Math.floor(Math.random()*list.length)]}
+function relocateSite(site){
+ const peers=site.type==="missile"?missileSites:droneSites,oldX=site.x,oldY=site.y;
+ const available=SITE_POSITIONS[site.type].filter(([x,y])=>(x!==oldX||y!==oldY)&&!peers.some(other=>other!==site&&other.x===x&&other.y===y));
+ const [x,y]=choose(available.length?available:SITE_POSITIONS[site.type]);
+ site.x=x;site.y=y;
+}
 function attackTarget(kind){
  const liveShips=ships.filter(s=>s.hp>0&&!s.done);
  const candidates=kind==="missile"?[...liveShips,...[refinery,terminal].filter(o=>o.hp>0)]:liveShips;
@@ -95,7 +105,7 @@ function hitTarget(m){
 function update(dt){
  if(state!=="playing"||paused)return;elapsed+=dt;spawnClock+=dt;
  defenseBases.forEach(b=>{if(b.resupplyUntil){const remaining=b.resupplyUntil-elapsed;if(remaining<=0){b.ammo=b.maxAmmo;b.resupplyUntil=0;ui.status.textContent=b===activeBase?b.name+" READY":"READY";updateHud()}else if(b===activeBase)ui.status.textContent="RESUPPLY "+remaining.toFixed(1)+"s"}});
- enemySites.forEach(site=>{if(site.respawnAt&&elapsed>=site.respawnAt){site.hp=site.type==="missile"?2:1;site.respawnAt=0;site.active=true}});
+ enemySites.forEach(site=>{if(site.respawnAt&&elapsed>=site.respawnAt){relocateSite(site);site.hp=site.type==="missile"?2:1;site.respawnAt=0;site.active=false}});
  if(spawned<TOTAL_MISSILES+TOTAL_DRONES&&spawnClock>Math.max(.58,1.28-elapsed*.011)){spawnClock=0;spawnThreat()}
  ships.forEach(s=>{if(s.hp>0&&!s.done){s.progress+=s.speed*dt;placeShip(s);if(s.progress>1.04){s.done=true;gas=Math.max(1.5,gas-.14);updateHud()}}});
  interceptors.forEach(i=>{const dx=i.tx-i.x,dy=i.ty-i.y,d=Math.hypot(dx,dy);i.trail.push([i.x,i.y]);if(i.trail.length>14)i.trail.shift();if(d<i.speed*dt){i.dead=true;blast(i.tx,i.ty,74,true)}else{i.x+=dx/d*i.speed*dt;i.y+=dy/d*i.speed*dt}});
