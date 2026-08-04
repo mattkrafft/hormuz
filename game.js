@@ -28,8 +28,8 @@ function placeShip(s){const p=routeSample(s.route,s.progress);s.x=p.x;s.y=p.y;s.
 
 const refinery={x:.62,y:.72,hp:2},terminal={x:.26,y:.78,hp:2};
 const defenseBases=[
- {x:.26,y:.78,ammo:6,maxAmmo:6,resupplyUntil:0,name:"WEST BASE"},
- {x:.63,y:.70,ammo:6,maxAmmo:6,resupplyUntil:0,name:"EAST BASE"}
+ {x:.26,y:.78,ammo:10,maxAmmo:10,resupplyUntil:0,name:"WEST BASE"},
+ {x:.63,y:.70,ammo:10,maxAmmo:10,resupplyUntil:0,name:"EAST BASE"}
 ];
 let activeBase=defenseBases[1];
 const SITE_POSITIONS={
@@ -55,8 +55,15 @@ function attackTarget(kind){
  const candidates=kind==="missile"?[...liveShips,...[refinery,terminal].filter(o=>o.hp>0)]:liveShips;
  if(!candidates.length)return null;
  const object=choose(candidates);
- return{object,x:object.x,y:object.y,kind:object===refinery||object===terminal?"base":"ship"};
+ if(kind==="drone")return{object,x:object.x,y:object.y,kind:"ship",seeking:true};
+ // Missile batteries commit to a fixed map coordinate when they fire. Early days
+ // deliberately scatter farther from the intended ship or base; accuracy tightens daily.
+ const accuracy=Math.min(.94,.40+(day-1)*.09),spread=(1-accuracy)*.10;
+ const angle=Math.random()*Math.PI*2,radius=Math.sqrt(Math.random())*spread;
+ return{object,x:Math.max(.02,Math.min(.98,object.x+Math.cos(angle)*radius)),y:Math.max(.02,Math.min(.98,object.y+Math.sin(angle)*radius)),kind:object===refinery||object===terminal?"base":"ship",seeking:false};
 }
+function projectileLimit(){return day<5?2:Math.min(5,3+Math.floor((day-5)/3))}
+function airborneFrom(site){return missiles.filter(t=>t.site===site&&!t.dead).length+drones.filter(t=>t.site===site&&!t.dead).length}
 
 function resize(){const r=canvas.getBoundingClientRect();dpr=Math.min(devicePixelRatio||1,2);W=r.width;H=r.height;canvas.width=W*dpr;canvas.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
 addEventListener("resize",resize);resize();
@@ -88,11 +95,12 @@ function spawnThreat(){
  const missileCount=spawned<TOTAL_MISSILES,droneCount=spawned>=TOTAL_MISSILES&&spawned<TOTAL_MISSILES+TOTAL_DRONES;
  const kind=missileCount?"missile":droneCount?"drone":null;
  if(!kind)return;
- const sites=(kind==="missile"?missileSites:droneSites).filter(s=>s.hp>0),target=attackTarget(kind);
- spawned++;
- if(!sites.length||!target)return;
- const site=choose(sites);site.active=true;const x=sx(site.x),y=sy(site.y),tx=sx(target.x),ty=sy(target.y),distance=Math.hypot(tx-x,ty-y);
- const threat={x,y,startX:x,startY:y,tx,ty,target,age:0,duration:distance/(kind==="missile"?92+Math.random()*28:58+Math.random()*18),trail:[]};
+ const sites=(kind==="missile"?missileSites:droneSites).filter(s=>s.hp>0&&airborneFrom(s)<projectileLimit());
+ if(!sites.length)return;
+ const target=attackTarget(kind);
+ if(!target)return;
+ const site=choose(sites);spawned++;site.active=true;const x=sx(site.x),y=sy(site.y),tx=sx(target.x),ty=sy(target.y),distance=Math.hypot(tx-x,ty-y);
+ const threat={x,y,startX:x,startY:y,tx,ty,target,site,age:0,duration:distance/(kind==="missile"?92+Math.random()*28:58+Math.random()*18),trail:[]};
  (kind==="missile"?missiles:drones).push(threat);
 }
 function blast(x,y,max=70,friendly=true){blasts.push({x,y,r:2,max,age:0,life:1.15,friendly,hitSites:new Set()});for(let i=0;i<14;i++)sparks.push({x,y,vx:(Math.random()-.5)*180,vy:(Math.random()-.5)*180,age:0,life:.35+Math.random()*.4})}
@@ -107,10 +115,10 @@ function update(dt){
  if(state!=="playing"||paused)return;elapsed+=dt;spawnClock+=dt;
  defenseBases.forEach(b=>{if(b.resupplyUntil){const remaining=b.resupplyUntil-elapsed;if(remaining<=0){b.ammo=b.maxAmmo;b.resupplyUntil=0;ui.status.textContent=b===activeBase?b.name+" READY":"READY";updateHud()}else if(b===activeBase)ui.status.textContent="RESUPPLY "+remaining.toFixed(1)+"s"}});
  enemySites.forEach(site=>{if(site.respawnAt&&elapsed>=site.respawnAt){relocateSite(site);site.hp=site.type==="missile"?2:1;site.respawnAt=0;site.active=false}});
- const fireInterval=Math.max(.42,1.75-(day-1)*.16-elapsed*.006);if(spawned<TOTAL_MISSILES+TOTAL_DRONES&&spawnClock>fireInterval){spawnClock=0;spawnThreat()}
+ const fireInterval=Math.max(.55,2.45-(day-1)*.18-elapsed*.004);if(spawned<TOTAL_MISSILES+TOTAL_DRONES&&spawnClock>fireInterval){spawnClock=0;spawnThreat()}
  ships.forEach(s=>{if(s.hp>0&&!s.done){s.progress+=s.speed*dt;placeShip(s);if(s.progress>1.04){s.done=true;gas=Math.max(1.5,gas-.14);updateHud()}}});
  interceptors.forEach(i=>{const dx=i.tx-i.x,dy=i.ty-i.y,d=Math.hypot(dx,dy);i.trail.push([i.x,i.y]);if(i.trail.length>14)i.trail.shift();if(d<i.speed*dt){i.dead=true;blast(i.tx,i.ty,74,true)}else{i.x+=dx/d*i.speed*dt;i.y+=dy/d*i.speed*dt}});
- missiles.forEach(m=>{m.tx=sx(m.target.object.x);m.ty=sy(m.target.object.y);m.age+=dt;const t=Math.min(1,m.age/m.duration),u=1-t,controlX=(m.startX+m.tx)/2,controlY=Math.min(m.startY,m.ty)-H*MISSILE_ARC;m.trail.push([m.x,m.y]);if(m.trail.length>24)m.trail.shift();m.x=u*u*m.startX+2*u*t*controlX+t*t*m.tx;m.y=u*u*m.startY+2*u*t*controlY+t*t*m.ty;if(t>=1){m.dead=true;hitTarget(m)}});
+ missiles.forEach(m=>{m.age+=dt;const t=Math.min(1,m.age/m.duration),u=1-t,controlX=(m.startX+m.tx)/2,controlY=Math.min(m.startY,m.ty)-H*MISSILE_ARC;m.trail.push([m.x,m.y]);if(m.trail.length>24)m.trail.shift();m.x=u*u*m.startX+2*u*t*controlX+t*t*m.tx;m.y=u*u*m.startY+2*u*t*controlY+t*t*m.ty;if(t>=1){m.dead=true;hitTarget(m)}});
  drones.forEach(d=>{d.tx=sx(d.target.object.x);d.ty=sy(d.target.object.y);d.age+=dt;const t=Math.min(1,d.age/d.duration);d.trail.push([d.x,d.y]);if(d.trail.length>18)d.trail.shift();d.x=d.startX+(d.tx-d.startX)*t;d.y=d.startY+(d.ty-d.startY)*t;if(t>=1){d.dead=true;hitTarget(d)}});
  blasts.forEach(b=>{b.age+=dt;const p=b.age/b.life;b.r=Math.sin(Math.min(1,p)*Math.PI)*b.max;if(b.age>b.life)b.dead=true;if(b.friendly){[...missiles,...drones].forEach(m=>{if(!m.dead&&Math.hypot(m.x-b.x,m.y-b.y)<b.r){m.dead=true;blast(m.x,m.y,44,true)}});enemySites.forEach(site=>{if(site.hp>0&&!b.hitSites.has(site)&&Math.hypot(sx(site.x)-b.x,sy(site.y)-b.y)<b.r){b.hitSites.add(site);site.hp--;blast(sx(site.x),sy(site.y),38,true);if(site.hp<=0){site.active=false;site.respawnAt=elapsed+3}}})}});
  sparks.forEach(s=>{s.age+=dt;s.x+=s.vx*dt;s.y+=s.vy*dt;s.vy+=90*dt;if(s.age>s.life)s.dead=true});
@@ -158,7 +166,7 @@ function drawShip(s){if(s.hp<=0){ctx.fillStyle="#6f351f";ctx.fillRect(sx(s.x)-14
 function drawDefenseBase(base){const x=sx(base.x),y=sy(base.y);ctx.save();ctx.translate(x,y);ctx.strokeStyle=base===activeBase?"#fff27a":"#d8c849";ctx.fillStyle="#20351b";ctx.lineWidth=base===activeBase?2.5:1.5;ctx.strokeRect(-18,-7,36,14);ctx.fillRect(-16,-5,32,10);ctx.beginPath();ctx.moveTo(-8,-8);ctx.lineTo(8,-24);ctx.stroke();if(base.resupplyUntil){ctx.strokeStyle="#75e7ff";ctx.beginPath();ctx.arc(0,0,23,-Math.PI/2,-Math.PI/2+Math.PI*2*(1-(base.resupplyUntil-elapsed)/4));ctx.stroke()}ctx.fillStyle=base===activeBase?"#fff27a":"#d8c849";ctx.font="12px Share Tech Mono";ctx.textAlign="center";ctx.fillText(String(base.ammo).padStart(2,"0"),0,29);ctx.restore()}
 function drawTargetZones(){
  ctx.save();ctx.strokeStyle="#ff9b4daa";ctx.lineWidth=1;ctx.setLineDash([3,3]);
- new Set([...missiles,...drones].map(t=>t.target.object)).forEach(object=>{const x=sx(object.x),y=sy(object.y);ctx.beginPath();ctx.arc(x,y,7,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.moveTo(x-10,y);ctx.lineTo(x+10,y);ctx.moveTo(x,y-10);ctx.lineTo(x,y+10);ctx.stroke()});
+ missiles.forEach(m=>{const x=m.tx,y=m.ty;ctx.beginPath();ctx.arc(x,y,7,0,Math.PI*2);ctx.stroke();ctx.beginPath();ctx.moveTo(x-10,y);ctx.lineTo(x+10,y);ctx.moveTo(x,y-10);ctx.lineTo(x,y+10);ctx.stroke()});
  ctx.restore();
 }
 function drawEnemySite(site){
@@ -169,9 +177,19 @@ function drawEnemySite(site){
  ctx.restore();
 }
 function drawThreatShape(t,type){
- const prev=t.trail.at(-2)||[t.startX,t.startY],angle=Math.atan2(t.y-prev[1],t.x-prev[0]);ctx.save();ctx.translate(t.x,t.y);ctx.rotate(angle);ctx.fillStyle=type==="missile"?"#ffb04d":"#ff8a55";ctx.strokeStyle="#ffd79a";ctx.lineWidth=1;
- ctx.beginPath();if(type==="missile"){ctx.moveTo(8,0);ctx.lineTo(-4,-3);ctx.lineTo(-8,-6);ctx.lineTo(-7,0);ctx.lineTo(-8,6);ctx.lineTo(-4,3)}
- else{ctx.moveTo(8,0);ctx.lineTo(-4,-3);ctx.lineTo(-10,-1);ctx.lineTo(-3,2);ctx.lineTo(-7,6);ctx.lineTo(1,3)}ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();
+ const prev=t.trail.at(-2)||[t.startX,t.startY],angle=Math.atan2(t.y-prev[1],t.x-prev[0]);ctx.save();ctx.translate(t.x,t.y);ctx.rotate(angle);ctx.lineWidth=1;
+ if(type==="missile"){
+  // Long ballistic silhouette: pointed nose, cylindrical body, rear fins,
+  // engine bell, and a hot exhaust plume keep it distinct from the drones.
+  ctx.fillStyle="#ffb04d";ctx.strokeStyle="#ffe0a8";
+  ctx.beginPath();ctx.moveTo(14,0);ctx.lineTo(8,-3.2);ctx.lineTo(-8,-3.2);ctx.lineTo(-13,-7);ctx.lineTo(-12,-2.7);ctx.lineTo(-16,-1.8);ctx.lineTo(-16,1.8);ctx.lineTo(-12,2.7);ctx.lineTo(-13,7);ctx.lineTo(-8,3.2);ctx.lineTo(8,3.2);ctx.closePath();ctx.fill();ctx.stroke();
+  ctx.strokeStyle="#9d3e24";ctx.beginPath();ctx.moveTo(7,-3);ctx.lineTo(7,3);ctx.moveTo(-9,-3);ctx.lineTo(-9,3);ctx.stroke();
+  ctx.fillStyle="#ff5c32";ctx.beginPath();ctx.moveTo(-16,-1.8);ctx.lineTo(-23,0);ctx.lineTo(-16,1.8);ctx.closePath();ctx.fill();
+  ctx.fillStyle="#ffe164";ctx.beginPath();ctx.moveTo(-16,-.8);ctx.lineTo(-20,0);ctx.lineTo(-16,.8);ctx.closePath();ctx.fill();
+ }else{
+  ctx.fillStyle="#ff8a55";ctx.strokeStyle="#ffd79a";ctx.beginPath();ctx.moveTo(8,0);ctx.lineTo(-4,-3);ctx.lineTo(-10,-1);ctx.lineTo(-3,2);ctx.lineTo(-7,6);ctx.lineTo(1,3);ctx.closePath();ctx.fill();ctx.stroke();
+ }
+ ctx.restore();
 }
 function drawObjects(){
  drawTargetZones();drawInfrastructure(refinery);drawInfrastructure(terminal);ships.forEach(drawShip);enemySites.forEach(drawEnemySite);defenseBases.forEach(drawDefenseBase);
