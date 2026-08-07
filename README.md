@@ -5,3 +5,7 @@ A browser game inspired by classic missile-defense arcade games. Protect shippin
 ## Play
 
 [Play the Hormuz Command demo](https://mattkrafft.github.io/hormuz/)
+
+## Model Viewer
+
+[View all game models](https://mattkrafft.github.io/hormuz/models.html)
